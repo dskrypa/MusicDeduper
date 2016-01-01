@@ -3,10 +3,11 @@
 '''
 Author: Douglas Skrypa
 Date: 2015.12.30
-Version: 1
+Version: 2
 '''
 
 import os;
+from pydub import AudioSegment;
 import hashlib;
 import shutil;
 
@@ -26,8 +27,10 @@ def main():
 	
 	for fname in fnames:
 		c += 1;
-		fpath = sdir + fname
-		fhash = hashlib.md5(open(fpath,"rb").read()).hexdigest()
+		fpath = sdir + fname;
+		
+		sound = AudioSegment.from_mp3(fpath);
+		fhash = hashlib.md5(sound.raw_data).hexdigest();
 		
 		if fhash not in hashes:
 			hashes[fhash] = True;
