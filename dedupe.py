@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2015.12.31
-Version: 6
+Version: 6b
 '''
 
 import os, sys, shutil, time, hashlib;
@@ -33,33 +33,33 @@ def main(args):
 		helpAndExit();
 	#/try
 
-	deduper1 = DeDuper(sdir, ddir, lpath, save_dir);
+	deduper1 = DeDuper(tsdir, tddir, tlpath, tsave_dir);
 	deduper1.dedupe(mode);
 #/main
 
 def helpAndExit():
-	prnt("Valid parameters: audio, full");
+	clio.println("Valid parameters: audio, full");
 	sys.exit(0);
 #/helpAndExit
 
 class clio():
-	'''		Command Line Interface Output		'''
-	def fmt(msg):										#Format for output
-		tcols = shutil.get_terminal_size()[0];			#Character columns available in the terminal window
-		blanks = "";
-		fc = tcols - len(msg);							#Fill Columns needed
+	def fmt(msg):
+		tcols = shutil.get_terminal_size()[0];
+		blanks = ""
+		fc = tcols - len(msg);
 		if (fc > 0):
 			blanks = " " * fc;
+		#/if
 		return "\r" + msg + blanks;
 	#/fmt
-	def show(msg):										#Show the given message and allow it to be overwritten
+	def show(msg):
 		sys.stdout.write(clio.fmt(msg));
 		sys.stdout.flush();
 	#/show
-	def println(msg):									#Print the given message so that it overwrites a previously shown message
+	def println(msg):
 		sys.stdout.write(clio.fmt(msg) + "\n");
 		sys.stdout.flush();
-	#/print
+	#/println
 #/clio
 
 class Modes(Enum):
@@ -103,7 +103,7 @@ class DeDuper():
 			try:
 				sound = AudioSegment.from_mp3(fpath);
 				return hashlib.md5(sound.raw_data).hexdigest();
-			except CouldntDecodeError:
+			except:
 				raise HashException("Unable to decode file: " + fpath);
 		elif (self.mode == Modes.full):
 			if (fpath[-3:].lower() != "mp3"):
@@ -125,6 +125,7 @@ class DeDuper():
 		hashes = HashList(self.mode, self.save_dir);							#Initialize a new HashList with the mode and save location
 		fnames = os.listdir(self.ddir);											#Array of file names (relative path) in the destination dir
 		t = len(fnames);														#Total number of files in the destination dir
+		tl = str(len(str(t)));													#Length of that number as a string
 		
 		if (hashes.count() == t):												#If the destination dir contains as many files as there were hashes saved
 			self.log2("Saved list appears to match destination directory!");
@@ -136,7 +137,7 @@ class DeDuper():
 		
 		self.log2("Scanning destination directory for existing files...");
 		
-		spfmt = "[{:7.2%}][Elapsed: {}] Current file: {}";						#Show progress report format
+		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}] Current file: {}";#Show progress report format
 		stime = time.perf_counter();											#Start time
 		ltime = stime;															#Last time progress was reported
 		c = 0;																	#Counter
@@ -148,7 +149,7 @@ class DeDuper():
 			if ((ctime - ltime) > 1):											#If it's been over 1 second since last progress report
 				ltime = ctime;													#Set last time to current time
 				fte = time.strftime("%H:%M:%S",time.gmtime(dtime));				#Formatted time elapsed
-				show(spfmt.format(c/t, fte, fname));							#Show current progress report
+				clio.show(spfmt.format(c/t, c, fte, fname));					#Show current progress report
 			#/if
 			
 			fpath = self.ddir + fname;											#Construct full path
@@ -172,7 +173,7 @@ class DeDuper():
 	
 	def processDirectory(self):
 		self.log2("Determining file uniqueness via {} content hash...".format(self.mode.name));
-		spfmt = "[{:7.2%}][Elapsed: {}][Copied: {:8,d}][Skipped: {:8,d}][Errors: {:8,d}]";		#Show progress report format
+		
 		stime = time.perf_counter();											#Start time
 		ltime = stime;															#Last time progress was reported
 		
@@ -187,7 +188,8 @@ class DeDuper():
 		errors = 0;																#Counter for errors
 		t = len(fnames);														#Total number of files to process
 		tl = str(len(str(t)));													#Length of that number as a string
-		pfmt = "[{:7.2%}|{:" + tl + "d}/" + str(t) + "] {} {} {}";				#Format string for progress reports
+		pfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"] {} {} {}";						#Format string for progress reports
+		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}][Copied: {:8,d}][Skipped: {:8,d}][Errors: {:8,d}]";		#Show progress report format
 		
 		for fname in fnames:													#Iterate through each file name
 			c += 1;																#Increment the counter
@@ -196,9 +198,9 @@ class DeDuper():
 			if ((ctime - ltime) > 1):											#If it's been over 1 second since last progress report
 				ltime = ctime;													#Set last time to current time
 				fte = time.strftime("%H:%M:%S",time.gmtime(dtime));				#Formatted time elapsed
-				show(spfmt.format(c/t, fte, copied, skipped, errors));			#Show current progress report
+				clio.show(spfmt.format(c/t, c, fte, copied, skipped, errors));	#Show current progress report
 			#/if
-			
+
 			fpath = self.sdir + fname;											#Rebuild the absolute path for the file
 			try:
 				fhash = self.getHash(fpath);									#Get the hash for the given mode
@@ -216,29 +218,30 @@ class DeDuper():
 			except Exception as ue:
 				errors += 1;
 				self.log2("[ERROR] Unexpected {} on file: {}".format(type(ue).__name__, fpath));
-				prnt(ue.args)
+				clio.println(ue.args)
 		#/for
 		
 		fmta = "Processed: {:d}";
 		fmtb = "{}   {:" + tl + "d} ({:.2%})"
-		prnt("Done!");
-		prnt(fmta.format(t));
-		prnt(fmtb.format("Copied: ", copied, copied/t));
-		prnt(fmtb.format("Skipped:", skipped, skipped/t));
-		prnt(fmtb.format("Errors: ", errors, errors/t));
+		clio.println("Done!");
+		clio.println(fmta.format(t));
+		clio.println(fmtb.format("Copied: ", copied, copied/t));
+		clio.println(fmtb.format("Skipped:", skipped, skipped/t));
+		clio.println(fmtb.format("Errors: ", errors, errors/t));
 		
+
 		etime = time.perf_counter();
 		rtime = etime-stime;
-		prnt("Runtime: " + time.strftime("%H:%M:%S",time.gmtime(rtime)));
+		clio.println("Runtime: " + time.strftime("%H:%M:%S",time.gmtime(rtime)));
 	#/processDirectory
 	
 	def dbg(self, msg):
 		if self.debugMode:
-			prnt(msg);
+			clio.println(msg);
 	#/dbg
 	
 	def log2(self, msg):
-		prnt(msg);
+		clio.println(msg);
 		self.log(msg);
 	#/log2
 #/DeDuper
