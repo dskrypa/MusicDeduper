@@ -3,14 +3,12 @@
 '''
 Author: Douglas Skrypa
 Date: 2015.12.31
-Version: 5
+Version: 6
 '''
 
 import os, sys, shutil, time, hashlib;
 from pydub import AudioSegment;
 from enum import Enum;
-
-tcols = shutil.get_terminal_size()[0];
 
 def main(args):
 	sdir = "/media/user/WD_1TB_External_Backup/unduped_full_hash/";
@@ -35,7 +33,7 @@ def main(args):
 		helpAndExit();
 	#/try
 
-	deduper1 = DeDuper(tsdir, tddir, tlpath, tsave_dir);
+	deduper1 = DeDuper(sdir, ddir, lpath, save_dir);
 	deduper1.dedupe(mode);
 #/main
 
@@ -44,25 +42,25 @@ def helpAndExit():
 	sys.exit(0);
 #/helpAndExit
 
-def show(msg):
-	blanks = ""
-	fc = tcols - len(msg);
-	if (fc > 0):
-		blanks = " " * fc;
-	#/if
-	sys.stdout.write("\r" + msg + blanks);
-	sys.stdout.flush();
-#/show
-
-def prnt(msg):
-	blanks = ""
-	fc = tcols - len(msg);
-	if (fc > 0):
-		blanks = " " * fc;
-	#/if
-	sys.stdout.write("\r" + msg + blanks + "\n");
-	sys.stdout.flush();
-#/prnt
+class clio():
+	'''		Command Line Interface Output		'''
+	def fmt(msg):										#Format for output
+		tcols = shutil.get_terminal_size()[0];			#Character columns available in the terminal window
+		blanks = "";
+		fc = tcols - len(msg);							#Fill Columns needed
+		if (fc > 0):
+			blanks = " " * fc;
+		return "\r" + msg + blanks;
+	#/fmt
+	def show(msg):										#Show the given message and allow it to be overwritten
+		sys.stdout.write(clio.fmt(msg));
+		sys.stdout.flush();
+	#/show
+	def println(msg):									#Print the given message so that it overwrites a previously shown message
+		sys.stdout.write(clio.fmt(msg) + "\n");
+		sys.stdout.flush();
+	#/print
+#/clio
 
 class Modes(Enum):
 	audio = 1;
@@ -167,7 +165,7 @@ class DeDuper():
 		
 		etime = time.perf_counter();
 		rtime = etime-stime;
-		prnt("Runtime: " + time.strftime("%H:%M:%S",time.gmtime(rtime)));
+		clio.println("Runtime: " + time.strftime("%H:%M:%S",time.gmtime(rtime)));
 		
 		return hashes;
 	#/getExistingHashes
@@ -201,8 +199,6 @@ class DeDuper():
 				show(spfmt.format(c/t, fte, copied, skipped, errors));			#Show current progress report
 			#/if
 			
-			
-			
 			fpath = self.sdir + fname;											#Rebuild the absolute path for the file
 			try:
 				fhash = self.getHash(fpath);									#Get the hash for the given mode
@@ -231,7 +227,6 @@ class DeDuper():
 		prnt(fmtb.format("Skipped:", skipped, skipped/t));
 		prnt(fmtb.format("Errors: ", errors, errors/t));
 		
-
 		etime = time.perf_counter();
 		rtime = etime-stime;
 		prnt("Runtime: " + time.strftime("%H:%M:%S",time.gmtime(rtime)));
