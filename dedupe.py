@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.01
-Version: 7
+Date: 2016.01.02
+Version: 7.1
 '''
 
 import os, sys, shutil, time, hashlib;
@@ -245,9 +245,6 @@ class DeDuper():
 			if ((ctime - ltime) > 1):											#If it's been over 1 second since last progress report
 				ltime = ctime;													#Set last time to current time
 				clio.showf(spfmt, c/t, c, fTime(dt), c/dt, rpath);				#Show current progress report
-				
-				#clio.show(spfmt.format(c/t, c, fTime(dt), c/dt, fname));		#Show current progress report
-				
 			#/if
 			
 			try:
@@ -306,8 +303,6 @@ class DeDuper():
 			ctime = time.perf_counter();										#Current time
 			dt = ctime - stime;													#Time delta since start
 			clio.showf(spfmt, c/t, c, fTime(dt), copied, skipped, errors, c/dt);#Show current progress report
-			
-			#clio.show(spfmt.format(c/t, c, fTime(dt), copied, skipped, errors, c/dt));#Show current progress report
 
 			rpath = fname;														#Relative path [future]
 			fpath = self.sdir + rpath;											#Rebuild the absolute path for the file

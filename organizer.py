@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.01
-Version: 1.1
+Date: 2016.01.02
+Version: 1.2
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -15,9 +15,21 @@ def main(args):
 	
 	org = Organizer(lpath);
 	info = org.collectInfo(sdir);
+	songs = org.parse(info);
 	
-	for fname in info:
-		clio.printf("{}:\n{}", fname, info[fname]);
+	fmt = "[Artist: {}][Album: {}][Title: {}]";
+	
+	for spath in songs:
+		song = songs[spath];
+		artist = song.getStr("Artist");
+		album = song.getStr("Album");
+		name = song.getStr("Title");
+		clio.printf(fmt, artist, album, name);
+	#/for
+	
+	
+	#for fname in info:
+		#clio.printf("{}:\n{}", fname, info[fname]);
 	#/for
 	
 	
@@ -27,17 +39,87 @@ def fTime(seconds):
 	return time.strftime("%H:%M:%S",time.gmtime(seconds));
 #/fTime
 
+
+class Song():
+	def __init__(self, path):
+		self.path = path;														#Save the location of this song
+		self.attrs1 = {};														#Initialize a dictionary to store ID3v1 attributes
+		self.attrs2 = {};														#Initialize a dictionary to store ID3v2 attributes
+	#/init
+	
+	def setx(self, ver, key, val):
+		'''Set the value of the key for the given tag version'''
+		if (ver == 1):
+			self.set1(key, val);
+		elif (ver == 2):
+			self.set2(key, val);
+	#/setx
+	
+	def set1(self, key, val):
+		'''Set the value of an ID3v1 tag'''
+		self.attrs1[key] = val;
+	#/set1
+	
+	def set2(self, key, val):
+		'''Set the value of an ID3v2 tag'''
+		self.attrs2[key] = val;
+	#/set1
+	
+	def get(self, attr):
+		'''Returns the value for the given attribute, if it exists. Favors ID3v2 over v1'''
+		if (attr in self.attrs2):
+			return self.attrs2[attr];
+		if (attr in self.attrs1):
+			return self.attrs1[attr];
+		return None;
+	#/get
+	
+	def getStr(self, attr):
+		val = self.get(attr);
+		return "[Unknown]" if (val == None) else val;
+	#/getStr
+#/song
+
 class Organizer():
 	def __init__(self, lpath):
 		self.errlog = ErrorLog(lpath);
 		self.log = self.errlog.record;
 	#/init
 	
+	def parse(self, info):
+		t1 = re.compile(r'^Tag 1:.*');											#Regex for ID3v1 lines
+		t2 = re.compile(r'^Tag 2:.*');											#Regex for ID3v2 lines
+		kv = re.compile(r'^\s\s(.*?)\s\s(.*)$');								#Regex for key:value lines
+		
+		songs = {};																#Initialize a dictionary to store songs
+		
+		for path in info:														#Iterate through the dictionary of info
+			song = Song(path);													#Create a new Song object for the song
+			ctag = 0;															#Current tag version info is being read from
+			
+			for line in info[path].splitlines():								#Iterate through each line in the stored output
+				if (t1.match(line)):											#If it's the start of an ID3v1 section
+					ctag = 1;													#Set the current tag version to 1
+				elif (t2.match(line)):											#If it's the start of an ID3v2 section
+					ctag = 2;													#Set the current tag version to 2
+				else:
+					if (ctag in [1,2]):											#If the tag version is set
+						m = kv.match(line);										#Test the line with the key:value pair regex
+						if (m):													#If the line matches
+							key = m.group(1).strip();							#Strip leading/trailing spaces on the key
+							val = m.group(2).strip();							#Strip leading/trailing spaces on the value
+							song.setx(ctag, key, val);							#Store the extracted key:value pair
+			#/for line
+			songs[path] = song;													#Store the Song in the dictionary
+		#/for path
+		return songs;															#Return the dictionary of songs
+	#/parser
+	
 	def collectInfo(self, sdir):
 		cmd = ["kid3-cli", "", "-c", "get"];									#List with the command and its args
 		
 		fnames = os.listdir(sdir);												#Get list of files in the given dir
-		ff = re.compile(".*\.mp3", re.IGNORECASE);								#Regex to filter file list to only mp3 files
+		ff = re.compile(r'.*\.mp3', re.IGNORECASE);								#Regex to filter file list to only mp3 files
 		filtered = [fname for fname in fnames if ff.match(fname)];				#Apply the filter
 		fnames = sorted(filtered);												#Sort the file list alphabetically
 		
