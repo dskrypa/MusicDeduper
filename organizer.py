@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.02
-Version: 1.3
+Date: 2016.01.03
+Version: 1.4
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -11,28 +11,30 @@ import subprocess as sproc;
 
 def main(args):
 	sdir = "/home/user/temp/src2/";
+	ddir = "/home/user/temp/dest/";
 	lpath = "/home/user/temp/organizer.log";
 	
 	org = Organizer(lpath);
 	info = org.collectInfo(sdir);
 	songs = org.parse(info);
+	org.organize(songs, ddir, True);
 	
-	fmt = "[Artist: {}][Album: {}][Title: {}]";
-	fmt2 = "{}:\n[Artist: {}] -> [Artist: {}]\n[Album: {}] -> [Album: {}]\n[Title: {}] -> [Title: {}]\n";
+	#fmt = "[Artist: {}][Album: {}][Title: {}]";
+	#fmt2 = "{}:\n[Artist: {}] -> [Artist: {}]\n[Album: {}] -> [Album: {}]\n[Title: {}] -> [Title: {}]\n";
 	
-	for spath in songs:
-		song = songs[spath];
-		artist = song.getStr("Artist");
-		album = song.getStr("Album");
-		name = song.getStr("Title");
+	#for spath in songs:
+		#song = songs[spath];
+		#artist = song.getStr("Artist");
+		#album = song.getStr("Album");
+		#name = song.getStr("Title");
 		
-		cartist = song.getClean("Artist");
-		calbum = song.getClean("Album");
-		cname = song.getClean("Title");
+		#cartist = song.getClean("Artist");
+		#calbum = song.getClean("Album");
+		#cname = song.getClean("Title");
 		
 		#clio.printf(fmt, artist, album, name);
 		
-		clio.printf(fmt2, spath, artist, cartist, album, calbum, name, cname);
+		#clio.printf(fmt2, spath, artist, cartist, album, calbum, name, cname);
 		
 	#/for
 	
@@ -97,6 +99,31 @@ class Organizer():
 		self.errlog = ErrorLog(lpath);
 		self.log = self.errlog.record;
 	#/init
+	
+	def organize(self, songs, ddir, action=False):
+		plen = 0;																#Longest path
+		for spath in songs:														#Iterate through each path to find the longest one
+			spl = len(spath);
+			plen = spl if (spl > plen) else plen;
+		#/for
+		ifmt = "{:"+str(plen)+"s} -> {}";										#Info format string using the longest path
+		pfmt = "{}/{}/{}.mp3";													#Path format string
+		for spath in songs:
+			song = songs[spath];
+			artist = song.getClean("Artist");
+			album = song.getClean("Album");
+			name = song.getClean("Title");
+			if ("Unknown" in (artist, album, name)):
+				bname = os.path.basename(spath);
+				rpath = "Unknown/" + bname;
+			else:
+				rpath = pfmt.format(artist, album, name);
+			npath = ddir + rpath;
+			clio.printf(ifmt, spath, npath);
+			if action:
+				os.renames(spath, npath);
+		#/for
+	#/organize
 	
 	def parse(self, info):
 		t1 = re.compile(r'^Tag 1:.*');											#Regex for ID3v1 lines
