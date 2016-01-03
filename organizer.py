@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.01.02
-Version: 1.2
+Version: 1.3
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -14,7 +14,7 @@ def main(args):
 	lpath = "/home/user/temp/organizer.log";
 	
 	org = Organizer(lpath);
-	info = org.collectInfo(sdir, 2);
+	info = org.collectInfo(sdir);
 	songs = org.parse(info);
 	
 	fmt = "[Artist: {}][Album: {}][Title: {}]";
@@ -26,9 +26,9 @@ def main(args):
 		album = song.getStr("Album");
 		name = song.getStr("Title");
 		
-		cartist = cleanup(artist);
-		calbum = cleanup(album);
-		cname = cleanup(name);
+		cartist = song.getClean("Artist");
+		calbum = song.getClean("Album");
+		cname = song.getClean("Title");
 		
 		#clio.printf(fmt, artist, album, name);
 		
@@ -38,15 +38,9 @@ def main(args):
 	
 #/main
 
-def cleanup(original):
-	bad = r'[?+*=%#&@$!:|`~"<>/\\\']';
-	return re.sub(bad, "", original);
-#/cleanup
-
 def fTime(seconds):
 	return time.strftime("%H:%M:%S",time.gmtime(seconds));
 #/fTime
-
 
 class Song():
 	def __init__(self, path):
@@ -84,8 +78,18 @@ class Song():
 	
 	def getStr(self, attr):
 		val = self.get(attr);
-		return "[Unknown]" if (val == None) else val;
+		return "Unknown" if (val == None) else val;
 	#/getStr
+	
+	def getClean(self, attr):
+		val = self.getStr(attr);
+		bad = r'[?+*=%#&@$!:|`~"<>/\\\']';
+		val = re.sub(bad, "", val).strip();
+		if (len(val) == 1):
+			aval = val.encode("ascii", "ignore").decode();
+			val = "" if (aval == "") else val;
+		return "Unknown" if (val == "") else val;
+	#/getClean
 #/song
 
 class Organizer():
