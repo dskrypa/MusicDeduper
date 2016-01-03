@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.01.01
-Version: 1
+Version: 1.1
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -69,7 +69,7 @@ class Organizer():
 				self.log2("Unable to process file: " + fpath);					#Log the file's name
 			else:
 				success += 1;
-				tagInfo[fpath] = sp_out;										#Save the output, using the file path as the key
+				tagInfo[fpath] = sp_out.decode();								#Save the output, using the file path as the key
 			#/if
 		#/for
 		
@@ -101,7 +101,7 @@ class clio():
 		return "\r" + smsg + blanks;
 	#/fmt
 	@classmethod
-	def show(cls, msg):
+	def show(cls, msg=""):
 		'''Display overwritable message'''
 		sys.stdout.write(cls._fmt(msg));
 		sys.stdout.flush();
@@ -113,7 +113,7 @@ class clio():
 		cls.show(msg);
 	#/showf
 	@classmethod
-	def println(cls, msg):
+	def println(cls, msg=""):
 		'''Display message on a new line'''
 		sys.stdout.write(cls._fmt(msg) + "\n");
 		sys.stdout.flush();
