@@ -20,8 +20,8 @@ def main(args):
 	#lpath = "/home/user/temp/organizer.log";
 	
 	mc = MusicCollection(ddir, lpath);
-	mc.addSongs(sdir, True, False, 20);
-	mc.executeMoves();
+	mc.addSongs(sdir, True, True);
+	#mc.executeMoves();
 #/main
 
 class MusicCollection():
@@ -47,8 +47,10 @@ class MusicCollection():
 		t = len(paths);															#Total number of files to process
 		t = fmax if ((fmax > 0) and (t > fmax)) else t;							#If the total file count is > the given max, cap it
 		tl = str(len(str(t)));													#Length of that number as a string
-		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}][Success: ";		#Show progress report format
-		spfmt += "{:"+tl+",d}][Error: {:"+tl+",d}][Rate: {:,.2f} files/sec] Current file: {}";
+		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}]";
+		if action:
+			spfmt += "[Success: {:"+tl+",d}][Error: {:"+tl+",d}]";	
+		spfmt += "[Rate: {:,.2f} files/sec] Current file: {}";
 		success = 0;															#Counter for successful files
 		errors = 0;																#Counter for errors
 		c = 0;																	#Counter for total files processed
@@ -61,7 +63,11 @@ class MusicCollection():
 			dt = pt.elapsed();													#Get the time delta
 			
 			rpath = path[blen:];												#Current path relative to the given base directory
-			clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, ".."+rpath);	#Show current progress report
+			
+			if action:
+				clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, ".."+rpath);
+			else:
+				clio.showf(spfmt, c/t, c, fTime(dt), c/dt, ".."+rpath);
 			
 			song = Song(path, movable);											#Initialize a new Song object
 			if self.initializing:
@@ -70,7 +76,7 @@ class MusicCollection():
 				song.bootstrap();												#Have the song gather it's own info
 				if self.addSong(song, action):									#Add the Song to this collection
 					success += 1;
-				else:
+				elif action:													#If adding wasn't successful and action is supposed to be taken, increment counter
 					errors += 1;
 		#/for path
 		
@@ -144,7 +150,7 @@ class MusicCollection():
 		song.setNewPath(dfmt.format(self.dir, artist, album), filename+".mp3");	#Save the new dir and name in the Song object
 		
 		if action:																#If action should be taken,
-			return tryMove(self, song);
+			return self.tryMove(song);
 	#/addSong
 	
 	def executeMoves(self):
