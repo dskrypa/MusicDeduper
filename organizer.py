@@ -3,53 +3,177 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.01.03
-Version: 1.4
+Version: 1.5
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
 import subprocess as sproc;
+from common import *;
 
 def main(args):
-	sdir = "/home/user/temp/src2/";
+	sdir = "/home/user/temp/src/";
 	ddir = "/home/user/temp/dest/";
 	lpath = "/home/user/temp/organizer.log";
 	
-	org = Organizer(lpath);
-	info = org.collectInfo(sdir);
-	songs = org.parse(info);
-	org.organize(songs, ddir, True);
-	
-	#fmt = "[Artist: {}][Album: {}][Title: {}]";
-	#fmt2 = "{}:\n[Artist: {}] -> [Artist: {}]\n[Album: {}] -> [Album: {}]\n[Title: {}] -> [Title: {}]\n";
-	
-	#for spath in songs:
-		#song = songs[spath];
-		#artist = song.getStr("Artist");
-		#album = song.getStr("Album");
-		#name = song.getStr("Title");
-		
-		#cartist = song.getClean("Artist");
-		#calbum = song.getClean("Album");
-		#cname = song.getClean("Title");
-		
-		#clio.printf(fmt, artist, album, name);
-		
-		#clio.printf(fmt2, spath, artist, cartist, album, calbum, name, cname);
-		
-	#/for
-	
+	mc = MusicCollection(ddir, lpath);
+	mc.addSongs(sdir, False, True);
 #/main
 
-def fTime(seconds):
-	return time.strftime("%H:%M:%S",time.gmtime(seconds));
-#/fTime
+class MusicCollection():
+	def __init__(self, ddir, lpath):
+		self.errlog = ErrorLog(lpath);											#Initialize an ErrorLog at the given path
+		self.log = self.errlog.record;											#Create a shortcut for convenience 
+		self.dir = ddir[:-1] if (ddir[-1:] == "/") else ddir;					#Save the given directory path
+		self.col = {};															#Initialize the collection dictionary
+		
+		self.addSongs(self.dir, False, False);									#Scan the destination directory, take no action on the files found
+	#/init
+	
+	def addSongs(self, sdir, movable=False, action=False, fmax=0):
+		tmsg = "[TEST]" if (movable or action) else "";
+		msg = "{}Scanning for music: {}";
+		self.log2(msg.format(tmsg, sdir));
+		
+		blen = len(sdir[:-1] if (sdir[-1:] == "/") else sdir);					#Length of the base dir's path
+		paths = getFilteredPaths(sdir, "mp3");									#Get the filtered, sorted list of paths
+		
+		t = len(paths);															#Total number of files to process
+		t = fmax if ((fmax > 0) and (t > fmax)) else t;							#If the total file count is > the given max, cap it
+		tl = str(len(str(t)));													#Length of that number as a string
+		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}][Success: ";		#Show progress report format
+		spfmt += "{:"+tl+",d}][Error: {:"+tl+",d}][Rate: {:,.2f} files/sec] Current file: {}";
+		success = 0;															#Counter for successful files
+		errors = 0;																#Counter for errors
+		c = 0;																	#Counter for total files processed
+		
+		pt = PerfTimer();														#Initialize new performance timer
+		for path in paths:														#Iterate through each of the paths
+			if ((fmax > 0) and (c >= fmax)):									#If a maximum file count was set, and that many files have been processed, stop
+				break;
+			c += 1;																#Increment the counter
+			dt = pt.elapsed();													#Get the time delta
+			rpath = ".." + path[blen:];											#Current path relative to the given base directory
+			clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, rpath);	#Show current progress report
+			
+			song = Song(path, movable);											#Initialize a new Song object
+			song.bootstrap();													#Have the song gather it's own info
+			self.addSong(song, action);											#Add the Song to this collection
+		#/for path
+		
+		self.log2("Scan complete for directory: " + sdir);
+		clio.println("Runtime: " + pt.elapsedf());								#Print the run time
+	#/addSongs
+	
+	def addSong(self, song, action=False):
+		tnum = song.get("Track Number");										#Get the given song's track number
+		if (tnum == None):														#If the track number is unavailable
+			tnum = "XX";														#Use "XX" instead
+		if (len(tnum) < 2):														#If it is a single digit
+			tnum = "0" + tnum;													#Prepend it with a 0
+		artist = song.getClean("Artist");										#Get the given song's artist
+		album = song.getClean("Album");											#Get the given song's album
+		title = song.getClean("Title");											#Get the given song's title
+		fname = "{} - {}".format(tnum, title);									#Set the file name to be TrackNumber - TrackName
+		
+		if ("Unknown" in (artist, album, title)):								#If any field is unknown
+			artist = "Unknown";													#Treat artist as unknown
+			album = "Unknown";													#And album as unknown
+			fname = song.getFileName()[:-4];									#And set the file name to be the same as before (ignore extension for now)
+		if not (artist in self.col):											#If the artist did not already exist in this collection
+			self.col[artist] = {};												#Add a dictionary for it
+		if not (album in self.col[artist]):										#If the album did not already exist for this artist
+			self.col[artist][album] = {};										#Add a dictionary for it
+		
+		filename = fname;														#Different filename var to facilitate uniqueness test
+		c = 0;																	#Counter for uniqueness test
+		while (filename in self.col[artist][album]):							#Loop while the file name isn't unique in this dir
+			c += 1;																#Increment the counter
+			filename = fname + str(c);											#Append the counter to the original (new) file name
+		
+		self.col[artist][album][filename] = song;								#Store a pointer to the Song here
+		
+		dfmt = "{}/{}/{}/";														#Format string for the file's new directory
+		song.setNewPath(dfmt.format(self.dir, artist, album), filename+".mp3");	#Save the new dir and name in the Song object
+		
+		if action:																#If action should be taken,
+			song.move();														#Move the file
+	#/addSong
+	
+	def log2(self, msg):
+		clio.println(msg);
+		self.log(msg);
+	#/log2
+#/MusicCollection
+
+class SongException(Exception):
+	def __init__(self, value):
+		self.value = value;
+	def __str__(self):
+		return repr(self.value);
+#/SongException
 
 class Song():
-	def __init__(self, path):
+	t1 = re.compile(r'^Tag 1:.*');												#Regex for ID3v1 lines
+	t2 = re.compile(r'^Tag 2:.*');												#Regex for ID3v2 lines
+	kv = re.compile(r'^\s\s(.*?)\s\s(.*)$');									#Regex for key:value lines
+		
+	def __init__(self, path, movable=False):
 		self.path = path;														#Save the location of this song
 		self.attrs1 = {};														#Initialize a dictionary to store ID3v1 attributes
 		self.attrs2 = {};														#Initialize a dictionary to store ID3v2 attributes
+		self.movable = movable;													#Whether or not this Song should be moved
+		self.newDir = None;														#New directory to be placed in
+		self.newName = None;													#New file name to use
 	#/init
+
+	def isMovable(self):
+		return self.movable;
+	#/isMovable
+
+	def bootstrap(self):
+		cmd = ["kid3-cli", self.path, "-c", "get"];
+		sp = sproc.Popen(cmd, stdout=sproc.PIPE, stderr=sproc.PIPE);			#Call the subprocess
+		sp_out, sp_err = sp.communicate();										#Retrieve the output
+		if (sp.returncode != 0):												#If it did not run successfully
+			raise SongException("Unable to process file: " + self.path);		#Raise a SongException
+		#/if
+		tagInfo = sp_out.decode();												#Save the output, using the file path as the key
+		self.parseOwnInfo(tagInfo);
+	#/bootstrap
+	
+	def parseOwnInfo(self, info):
+		ctag = 0;																#Current tag version info is being read from
+		for line in info.splitlines():
+			if (Song.t1.match(line)):											#If it's the start of an ID3v1 section
+				ctag = 1;														#Set the current tag version to 1
+			elif (Song.t2.match(line)):											#If it's the start of an ID3v2 section
+				ctag = 2;														#Set the current tag version to 2
+			else:
+				if (ctag in [1,2]):												#If the tag version is set
+					m = Song.kv.match(line);									#Test the line with the key:value pair regex
+					if (m):														#If the line matches
+						key = m.group(1).strip();								#Strip leading/trailing spaces on the key
+						val = m.group(2).strip();								#Strip leading/trailing spaces on the value
+						self.setx(ctag, key, val);								#Store the extracted key:value pair
+		#/for line
+	#/parseOwnInfo
+	
+	def setNewPath(self, newDir, newName):
+		self.newDir = newDir;
+		self.newName = newName;
+	#/setNewPath
+	
+	def getNewLoc(self):
+		return (self.newDir, self.newName);
+	#/getNewLoc
+	
+	def getPath(self):
+		return self.path;
+	#/getPath
+	
+	def getFileName(self):
+		return os.path.basename(self.path);
+	#/getFileName
 	
 	def setx(self, ver, key, val):
 		'''Set the value of the key for the given tag version'''
@@ -92,179 +216,24 @@ class Song():
 			val = "" if (aval == "") else val;
 		return "Unknown" if (val == "") else val;
 	#/getClean
+	
+	def move(self):
+		'''Display old and new paths, if not in testing mode, move the file'''
+		newpath = self.newDir + self.newName;
+		clio.printf("{} -> {}", self.path, newpath);
+		
+		if not self.movable:
+			return;
+				
+		if not os.path.isdir(self.newDir):
+			os.makedirs(self.newDir);
+		
+		if os.path.exists(newpath):
+			raise SongException("Unable to move; file exists: " + newpath);
+		else:
+			os.rename(self.path, newpath);	
+	#/moveSong
 #/song
-
-class Organizer():
-	def __init__(self, lpath):
-		self.errlog = ErrorLog(lpath);
-		self.log = self.errlog.record;
-	#/init
-	
-	def organize(self, songs, ddir, action=False):
-		plen = 0;																#Longest path
-		for spath in songs:														#Iterate through each path to find the longest one
-			spl = len(spath);
-			plen = spl if (spl > plen) else plen;
-		#/for
-		ifmt = "{:"+str(plen)+"s} -> {}";										#Info format string using the longest path
-		pfmt = "{}/{}/{}.mp3";													#Path format string
-		for spath in songs:
-			song = songs[spath];
-			artist = song.getClean("Artist");
-			album = song.getClean("Album");
-			name = song.getClean("Title");
-			if ("Unknown" in (artist, album, name)):
-				bname = os.path.basename(spath);
-				rpath = "Unknown/" + bname;
-			else:
-				rpath = pfmt.format(artist, album, name);
-			npath = ddir + rpath;
-			clio.printf(ifmt, spath, npath);
-			if action:
-				os.renames(spath, npath);
-		#/for
-	#/organize
-	
-	def parse(self, info):
-		t1 = re.compile(r'^Tag 1:.*');											#Regex for ID3v1 lines
-		t2 = re.compile(r'^Tag 2:.*');											#Regex for ID3v2 lines
-		kv = re.compile(r'^\s\s(.*?)\s\s(.*)$');								#Regex for key:value lines
-		
-		songs = {};																#Initialize a dictionary to store songs
-		
-		for path in info:														#Iterate through the dictionary of info
-			song = Song(path);													#Create a new Song object for the song
-			ctag = 0;															#Current tag version info is being read from
-			
-			for line in info[path].splitlines():								#Iterate through each line in the stored output
-				if (t1.match(line)):											#If it's the start of an ID3v1 section
-					ctag = 1;													#Set the current tag version to 1
-				elif (t2.match(line)):											#If it's the start of an ID3v2 section
-					ctag = 2;													#Set the current tag version to 2
-				else:
-					if (ctag in [1,2]):											#If the tag version is set
-						m = kv.match(line);										#Test the line with the key:value pair regex
-						if (m):													#If the line matches
-							key = m.group(1).strip();							#Strip leading/trailing spaces on the key
-							val = m.group(2).strip();							#Strip leading/trailing spaces on the value
-							song.setx(ctag, key, val);							#Store the extracted key:value pair
-			#/for line
-			songs[path] = song;													#Store the Song in the dictionary
-		#/for path
-		return songs;															#Return the dictionary of songs
-	#/parser
-	
-	def collectInfo(self, sdir, fmax=0):
-		cmd = ["kid3-cli", "", "-c", "get"];									#List with the command and its args
-		
-		fnames = os.listdir(sdir);												#Get list of files in the given dir
-		ff = re.compile(r'.*\.mp3', re.IGNORECASE);								#Regex to filter file list to only mp3 files
-		filtered = [fname for fname in fnames if ff.match(fname)];				#Apply the filter
-		fnames = sorted(filtered);												#Sort the file list alphabetically
-		
-		t = len(fnames);														#Total number of files to process
-		t = fmax if ((fmax > 0) and (t > fmax)) else t;							#If the total file count is > the given max, cap it
-		tl = str(len(str(t)));													#Length of that number as a string
-		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}][Success: ";		#Show progress report format
-		spfmt += "{:"+tl+",d}][Error: {:"+tl+",d}][Rate: {:,.2f} files/sec] Current file: {}";
-		success = 0;															#Counter for successful files
-		errors = 0;																#Counter for errors
-		c = 0;																	#Counter for total files processed
-		
-		stime = time.perf_counter();											#Start time
-		
-		tagInfo = {};															#Initialize dictionary to store info
-		for fname in fnames:													#Iterate through each file name
-			if ((fmax > 0) and (c >= fmax)):									#If a maximum file count was set, and that many files have been processed, stop
-				break;
-			c += 1;																#Increment the counter
-			ctime = time.perf_counter();										#Current time
-			dt = ctime - stime;													#Time delta since start
-			clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, fname);	#Show current progress report
-			
-			fpath = sdir + fname;												#Rebuild the absolute path
-			cmd[1] = fpath;														#Set the first arg to bo the file's path
-			#cmd = cmdfmt.format(fpath);											#Insert the file path in to the command
-			sp = sproc.Popen(cmd, stdout=sproc.PIPE, stderr=sproc.PIPE);		#Call the subprocess
-			sp_out, sp_err = sp.communicate();									#Retrieve the output
-		
-			if (sp.returncode != 0):											#If it did not run successfully
-				errors += 1;
-				self.log2("Unable to process file: " + fpath);					#Log the file's name
-			else:
-				success += 1;
-				tagInfo[fpath] = sp_out.decode();								#Save the output, using the file path as the key
-			#/if
-		#/for
-		
-		etime = time.perf_counter();
-		rtime = etime-stime;
-		clio.println("Runtime: " + fTime(rtime));
-		
-		return tagInfo;															#Return the dictionary
-	#/collectInfo
-
-	def log2(self, msg):
-		clio.println(msg);
-		self.log(msg);
-	#/log2
-#/Organizer
-
-class clio():
-	'''Command Line Interface Output'''
-	@classmethod
-	def _fmt(cls, msg):
-		'''Format the given message for overwriting'''
-		tcols = shutil.get_terminal_size()[0];									#Number of text character columns available in the terminal window
-		blanks = "";
-		smsg = str(msg);														#Make sure the input is a string
-		fc = tcols - len(smsg);													#Determine the number of columns need to be filled after the given message
-		if (fc > 0):
-			blanks = " " * fc;
-		#/if
-		return "\r" + smsg + blanks;
-	#/fmt
-	@classmethod
-	def show(cls, msg=""):
-		'''Display overwritable message'''
-		sys.stdout.write(cls._fmt(msg));
-		sys.stdout.flush();
-	#/show
-	@classmethod
-	def showf(cls, fmt, *args):
-		'''Display formatted overwritable message'''
-		msg = fmt.format(*args);
-		cls.show(msg);
-	#/showf
-	@classmethod
-	def println(cls, msg=""):
-		'''Display message on a new line'''
-		sys.stdout.write(cls._fmt(msg) + "\n");
-		sys.stdout.flush();
-	#/println
-	@classmethod
-	def printf(cls, fmt, *args):
-		'''Display formatted message on a new line'''
-		msg = fmt.format(*args);
-		cls.println(msg);
-	#/printf
-#/clio
-
-class ErrorLog():
-	def __init__(self, path):
-		self.logfile = open(path, "a");
-		self.tfmt = "%Y-%m-%d_%H:%M:%S";
-		self.lfmt = "[{}] {}\n";
-	#/init
-	def record(self, err):
-		ts = time.strftime(self.tfmt, time.localtime());
-		self.logfile.write(self.lfmt.format(ts, err));
-		self.logfile.flush();
-	#/record
-	def close(self):
-		self.logfile.close();
-	#/close
-#/ErrorLog
 
 if __name__ == "__main__":
 	main(sys.argv);
