@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.01.03
-Version: 1.5
+Version: 1.6
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -11,12 +11,16 @@ import subprocess as sproc;
 from common import *;
 
 def main(args):
-	sdir = "/home/user/temp/src/";
-	ddir = "/home/user/temp/dest/";
+	sdir = "/media/user/IntelSSD/unduped_audio_hash/";
+	ddir = "/media/user/IntelSSD/organized/";
 	lpath = "/home/user/temp/organizer.log";
 	
+	#sdir = "/home/user/temp/src2/";
+	#ddir = "/home/user/temp/dest/";
+	#lpath = "/home/user/temp/organizer.log";
+	
 	mc = MusicCollection(ddir, lpath);
-	mc.addSongs(sdir, False, True);
+	mc.addSongs(sdir, True, True);
 #/main
 
 class MusicCollection():
@@ -30,7 +34,7 @@ class MusicCollection():
 	#/init
 	
 	def addSongs(self, sdir, movable=False, action=False, fmax=0):
-		tmsg = "[TEST]" if (movable or action) else "";
+		tmsg = "[TEST]" if (movable ^ action) else "";
 		msg = "{}Scanning for music: {}";
 		self.log2(msg.format(tmsg, sdir));
 		
@@ -68,8 +72,16 @@ class MusicCollection():
 		tnum = song.get("Track Number");										#Get the given song's track number
 		if (tnum == None):														#If the track number is unavailable
 			tnum = "XX";														#Use "XX" instead
+		else:
+			if not tnum.isdigit():												#If tnum is not numeric
+				m = re.compile(r'(\d{1,})/\d{1,}').match(tnum);					#See if it's in a form like 01/12
+				if (m):															#If it is
+					tnum = m.group(1);											#Take the portion before the slash
+				else:
+					tnum = "XX";												#Otherwise ignore it
 		if (len(tnum) < 2):														#If it is a single digit
 			tnum = "0" + tnum;													#Prepend it with a 0
+		
 		artist = song.getClean("Artist");										#Get the given song's artist
 		album = song.getClean("Album");											#Get the given song's album
 		title = song.getClean("Title");											#Get the given song's title
@@ -96,7 +108,10 @@ class MusicCollection():
 		song.setNewPath(dfmt.format(self.dir, artist, album), filename+".mp3");	#Save the new dir and name in the Song object
 		
 		if action:																#If action should be taken,
-			song.move();														#Move the file
+			try:
+				song.move();													#Move the file
+			except:
+				self.log2("[ERROR] Unable to move file: " + song.getPath());
 	#/addSong
 	
 	def log2(self, msg):
