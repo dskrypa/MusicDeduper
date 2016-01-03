@@ -61,6 +61,8 @@ class clio():
 		if (fc > 0):
 			blanks = " " * fc;
 		#/if
+		if (len(smsg) > tcols):
+			smsg = smsg[:tcols-1];
 		return "\r" + smsg + blanks;
 	#/fmt
 	@classmethod

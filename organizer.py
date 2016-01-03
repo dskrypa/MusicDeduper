@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.01.03
-Version: 1.6
+Version: 1.7
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -20,7 +20,8 @@ def main(args):
 	#lpath = "/home/user/temp/organizer.log";
 	
 	mc = MusicCollection(ddir, lpath);
-	mc.addSongs(sdir, True, True);
+	mc.addSongs(sdir, True, False, 20);
+	mc.executeMoves();
 #/main
 
 class MusicCollection():
@@ -30,14 +31,16 @@ class MusicCollection():
 		self.dir = ddir[:-1] if (ddir[-1:] == "/") else ddir;					#Save the given directory path
 		self.col = {};															#Initialize the collection dictionary
 		
+		self.allSongs = [];
+		
+		self.initializing = True;
+		self.pparser = re.compile(r'^/([^/]+)/([^/]+)/(.*).mp3$', re.IGNORECASE);
 		self.addSongs(self.dir, False, False);									#Scan the destination directory, take no action on the files found
+		self.initializing = False;
 	#/init
 	
 	def addSongs(self, sdir, movable=False, action=False, fmax=0):
-		tmsg = "[TEST]" if (movable ^ action) else "";
-		msg = "{}Scanning for music: {}";
-		self.log2(msg.format(tmsg, sdir));
-		
+		self.log2("Scanning for music: " + sdir);
 		blen = len(sdir[:-1] if (sdir[-1:] == "/") else sdir);					#Length of the base dir's path
 		paths = getFilteredPaths(sdir, "mp3");									#Get the filtered, sorted list of paths
 		
@@ -56,17 +59,49 @@ class MusicCollection():
 				break;
 			c += 1;																#Increment the counter
 			dt = pt.elapsed();													#Get the time delta
-			rpath = ".." + path[blen:];											#Current path relative to the given base directory
-			clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, rpath);	#Show current progress report
+			
+			rpath = path[blen:];												#Current path relative to the given base directory
+			clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, ".."+rpath);	#Show current progress report
 			
 			song = Song(path, movable);											#Initialize a new Song object
-			song.bootstrap();													#Have the song gather it's own info
-			self.addSong(song, action);											#Add the Song to this collection
+			if self.initializing:
+				self.addSimple(rpath, song);
+			else:
+				song.bootstrap();												#Have the song gather it's own info
+				if self.addSong(song, action):									#Add the Song to this collection
+					success += 1;
+				else:
+					errors += 1;
 		#/for path
 		
 		self.log2("Scan complete for directory: " + sdir);
-		clio.println("Runtime: " + pt.elapsedf());								#Print the run time
+		fmtb = "{}   {:" + tl + "d} ({:.2%})"
+		clio.printf("Processed: {:d}", t);
+		if not self.initializing:
+			clio.printf(fmtb, "Renamed: ", success, success/t);
+			clio.printf(fmtb, "Errors: ", errors, errors/t);
+			
+		clio.printf("Runtime: {}\t({:,.2f} files/sec)", pt.elapsedf(), c/pt.elapsed());
 	#/addSongs
+	
+	def addSimple(self, relPath, song):
+		m = self.pparser.match(relPath);
+		if (m):
+			artist = m.group(1);
+			album = m.group(2);
+			filename = m.group(3);
+			
+			if not (artist in self.col):											#If the artist did not already exist in this collection
+				self.col[artist] = {};												#Add a dictionary for it
+			if not (album in self.col[artist]):										#If the album did not already exist for this artist
+				self.col[artist][album] = {};										#Add a dictionary for it
+		
+			self.col[artist][album][filename] = song;								#Store a pointer to the Song here
+			self.allSongs.append(song);
+		else:
+			clio.println("ERROR");
+			sys.exit(1);
+	#/addSimple
 	
 	def addSong(self, song, action=False):
 		tnum = song.get("Track Number");										#Get the given song's track number
@@ -103,16 +138,52 @@ class MusicCollection():
 			filename = fname + str(c);											#Append the counter to the original (new) file name
 		
 		self.col[artist][album][filename] = song;								#Store a pointer to the Song here
+		self.allSongs.append(song);
 		
 		dfmt = "{}/{}/{}/";														#Format string for the file's new directory
 		song.setNewPath(dfmt.format(self.dir, artist, album), filename+".mp3");	#Save the new dir and name in the Song object
 		
 		if action:																#If action should be taken,
-			try:
-				song.move();													#Move the file
-			except:
-				self.log2("[ERROR] Unable to move file: " + song.getPath());
+			return tryMove(self, song);
 	#/addSong
+	
+	def executeMoves(self):
+		self.log2("Executing moves now...");
+		t = len(self.allSongs);													#Total number of files to process
+		tl = str(len(str(t)));													#Length of that number as a string
+		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}][Success: ";		#Show progress report format
+		spfmt += "{:"+tl+",d}][Error: {:"+tl+",d}][Rate: {:,.2f} files/sec]";
+		success = 0;															#Counter for successful files
+		errors = 0;																#Counter for errors
+		c = 0;																	#Counter for total files processed
+		
+		pt = PerfTimer();														#Initialize new performance timer
+		for song in self.allSongs:												#Iterate through each pre-processed song
+			c += 1;																#Increment the counter
+			dt = pt.elapsed();													#Get the time delta
+			clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt);		#Show current progress report
+			if song.isMovable():
+				if self.tryMove(song):
+					success += 1;
+				else:
+					errors += 1;
+		#/for song
+		
+		self.log2("Moves complete!");
+		fmtb = "{}   {:" + tl + "d} ({:.2%})"
+		clio.printf(fmtb, "Renamed: ", success, success/t);
+		clio.printf(fmtb, "Errors: ", errors, errors/t);
+		clio.printf("Runtime: {}\t({:,.2f} files/sec)", pt.elapsedf(), c/pt.elapsed());
+	#/executeMoves
+	
+	def tryMove(self, song):
+		try:
+			song.move();														#Move the file
+			return True;
+		except:
+			self.log2("[ERROR] Unable to move file: " + song.getPath());
+			return False;
+	#/tryMove
 	
 	def log2(self, msg):
 		clio.println(msg);
@@ -224,7 +295,7 @@ class Song():
 	
 	def getClean(self, attr):
 		val = self.getStr(attr);
-		bad = r'[?+*=%#&@$!:|`~"<>/\\\']';
+		bad = r'[?+*=%#&@$!;:|`~"<>/\\\']';
 		val = re.sub(bad, "", val).strip();
 		if (len(val) == 1):
 			aval = val.encode("ascii", "ignore").decode();
