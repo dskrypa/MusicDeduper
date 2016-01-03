@@ -14,26 +14,34 @@ def main(args):
 	lpath = "/home/user/temp/organizer.log";
 	
 	org = Organizer(lpath);
-	info = org.collectInfo(sdir);
+	info = org.collectInfo(sdir, 2);
 	songs = org.parse(info);
 	
 	fmt = "[Artist: {}][Album: {}][Title: {}]";
+	fmt2 = "{}:\n[Artist: {}] -> [Artist: {}]\n[Album: {}] -> [Album: {}]\n[Title: {}] -> [Title: {}]\n";
 	
 	for spath in songs:
 		song = songs[spath];
 		artist = song.getStr("Artist");
 		album = song.getStr("Album");
 		name = song.getStr("Title");
-		clio.printf(fmt, artist, album, name);
+		
+		cartist = cleanup(artist);
+		calbum = cleanup(album);
+		cname = cleanup(name);
+		
+		#clio.printf(fmt, artist, album, name);
+		
+		clio.printf(fmt2, spath, artist, cartist, album, calbum, name, cname);
+		
 	#/for
-	
-	
-	#for fname in info:
-		#clio.printf("{}:\n{}", fname, info[fname]);
-	#/for
-	
 	
 #/main
+
+def cleanup(original):
+	bad = r'[?+*=%#&@$!:|`~"<>/\\\']';
+	return re.sub(bad, "", original);
+#/cleanup
 
 def fTime(seconds):
 	return time.strftime("%H:%M:%S",time.gmtime(seconds));
@@ -115,7 +123,7 @@ class Organizer():
 		return songs;															#Return the dictionary of songs
 	#/parser
 	
-	def collectInfo(self, sdir):
+	def collectInfo(self, sdir, fmax=0):
 		cmd = ["kid3-cli", "", "-c", "get"];									#List with the command and its args
 		
 		fnames = os.listdir(sdir);												#Get list of files in the given dir
@@ -124,6 +132,7 @@ class Organizer():
 		fnames = sorted(filtered);												#Sort the file list alphabetically
 		
 		t = len(fnames);														#Total number of files to process
+		t = fmax if ((fmax > 0) and (t > fmax)) else t;							#If the total file count is > the given max, cap it
 		tl = str(len(str(t)));													#Length of that number as a string
 		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}][Success: ";		#Show progress report format
 		spfmt += "{:"+tl+",d}][Error: {:"+tl+",d}][Rate: {:,.2f} files/sec] Current file: {}";
@@ -135,6 +144,8 @@ class Organizer():
 		
 		tagInfo = {};															#Initialize dictionary to store info
 		for fname in fnames:													#Iterate through each file name
+			if ((fmax > 0) and (c >= fmax)):									#If a maximum file count was set, and that many files have been processed, stop
+				break;
 			c += 1;																#Increment the counter
 			ctime = time.perf_counter();										#Current time
 			dt = ctime - stime;													#Time delta since start
