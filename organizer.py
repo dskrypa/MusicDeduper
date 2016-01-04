@@ -15,7 +15,7 @@ def main(args):
 	ddir = "/media/user/IntelSSD/organized/";
 	lpath = "/home/user/temp/organizer.log";
 	
-	#sdir = "/home/user/temp/src2/";
+	#sdir = "/home/user/temp/src/";
 	#ddir = "/home/user/temp/dest/";
 	#lpath = "/home/user/temp/organizer.log";
 	
@@ -50,7 +50,7 @@ class MusicCollection():
 		spfmt = "[{:7.2%}|{:"+tl+"d}/"+str(t)+"][Elapsed: {}]";
 		if action:
 			spfmt += "[Success: {:"+tl+",d}][Error: {:"+tl+",d}]";	
-		spfmt += "[Rate: {:,.2f} files/sec] Current file: {}";
+		spfmt += "[Rate: {:,.2f} files/sec][Remaining: ~{}] Current file: {}";
 		success = 0;															#Counter for successful files
 		errors = 0;																#Counter for errors
 		c = 0;																	#Counter for total files processed
@@ -64,10 +64,13 @@ class MusicCollection():
 			
 			rpath = path[blen:];												#Current path relative to the given base directory
 			
+			rate = c/dt;
+			remaining = fTime((t-c) / rate);
+			
 			if action:
-				clio.showf(spfmt, c/t, c, fTime(dt), success, errors, c/dt, ".."+rpath);
+				clio.showf(spfmt, c/t, c, fTime(dt), success, errors, rate, remaining, ".."+rpath);
 			else:
-				clio.showf(spfmt, c/t, c, fTime(dt), c/dt, ".."+rpath);
+				clio.showf(spfmt, c/t, c, fTime(dt), rate, remaining, ".."+rpath);
 			
 			song = Song(path, movable);											#Initialize a new Song object
 			if self.initializing:
