@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.03
-Version: 1
+Date: 2016.01.09
+Version: 1.2
 '''
 
 import os, shutil, sys, time, re;
@@ -46,8 +46,13 @@ class PerfTimer():
 		self.start = time.perf_counter();										#Initialize the timer with the current time
 	#/init
 
-	def elapsed(self):
-		return time.perf_counter() - self.start;								#Return the time delta in seconds since initialization
+	def time(self):
+		return time.perf_counter();												#Return the current time using the same method as the internal timer
+	#/time	
+	
+	def elapsed(self, since=None):
+		sinceTime = self.start if (since == None) else since;
+		return time.perf_counter() - sinceTime;									#Return the time delta in seconds since initialization
 	#/elapsed
 	
 	def elapsedf(self):
