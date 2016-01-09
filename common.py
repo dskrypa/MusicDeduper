@@ -31,7 +31,13 @@ def getFilteredPaths(path, ext, sort=True):
 #/getFilteredPaths
 
 def fTime(seconds):
-	return time.strftime("%H:%M:%S",time.gmtime(seconds));						#Return a string representation of the given number of seconds as HH:MM:SS
+	seconds = int(seconds);
+	minutes = int(seconds / 60);
+	seconds -= (minutes * 60);
+	hours = int(minutes / 60);
+	minutes -= (hours * 60);
+	return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds);
+	#return time.strftime("%H:%M:%S",time.gmtime(seconds));						#Return a string representation of the given number of seconds as HH:MM:SS
 #/fTime
 
 class PerfTimer():
