@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.03
-Version: 1
+Date: 2016.01.09
+Version: 1.2
 '''
 
 import os, shutil, sys, time, re;
