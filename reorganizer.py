@@ -37,7 +37,7 @@ def main():
 			paths = loadActions(actPath);
 			takeActions(paths, args.verbose, args.nomove);
 	
-	sys.exit(0);
+	#sys.exit(0);
 	
 	printf("Scanning {} for music...", mdir);
 	music = scanDir(mdir);
@@ -99,7 +99,8 @@ def moveFiles(baseDir, files, verbose, nomove):
 #/moveFiles
 
 def processMusic(music):
-	reorg = {"Billboard":"/Billboard/", "Now Thats What I Call Music":"/NowCompilations/"};
+	#reorg = {"Billboard":"/Billboard/", "Now Thats What I Call Music":"/NowCompilations/", "Power Trakks":"/PowerTrakks/"};
+	reorg = {"Power Trakks":"/PowerTrakks/"};
 	moves = {};
 	for artist in music:
 		for album in music[artist]:

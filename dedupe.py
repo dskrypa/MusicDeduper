@@ -1,16 +1,19 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.09
-Version: 7.2
+Date: 2016.01.24
+Version: 8
 '''
 
+from __future__ import division;
 import os, sys, shutil, time, hashlib;
-from pydub import AudioSegment;
-from enum import Enum;
+from enum import Enum;															#For Python 2, need to run 'sudo pip install enum34'
 from argparse import ArgumentParser;
+import tempfile;
+import eyeD3b as eyeD3;															#A version of eyeD3 with a kludge added by me to make it support using a SpooledTemporaryFile
 from common import *;
+
 
 def main():
 	#Real paths
@@ -20,8 +23,8 @@ def main():
 	save_dir = "/home/user/temp/";
 
 	#Test paths
-	tsdir = "/home/user/temp/src/";
-	tddir = "/home/user/temp/dest/";
+	tsdir = "/home/user/temp/srcx/";
+	tddir = "/home/user/temp/src2/";
 	tlpath = "/home/user/temp/test_dedupe.log";
 	tsave_dir = "/home/user/temp/test_";
 	
@@ -90,9 +93,14 @@ class DeDuper():
 			raise HashException("Skipping non-mp3 file: " + fpath);
 		elif (self.mode == Modes.audio):
 			try:
-				sound = AudioSegment.from_mp3(fpath);
-				return hashlib.md5(sound.raw_data).hexdigest();
-			except:
+				tag = eyeD3.Tag();												#Initialize a new eyeD3 Tag
+				mfile = tempfile.SpooledTemporaryFile();						#Initialize a temporary file in memory
+				mfile.write(open(fpath, "rb").read());							#Copy the contents of the file into memory
+				tag.link(mfile);												#Process the file for Id3 tags
+				tag.remove(eyeD3.ID3_ANY_VERSION);								#Remove all ID3 (v1 & v2) tags from the temporary file in memory
+				mfile.seek(0);													#Need to move the pointer back to the beginning before hashing
+				return hashlib.md5(mfile.read()).hexdigest();					#Return the hash of the audio content of the file
+			except Exception as e:
 				raise HashException("Unable to decode file: " + fpath);
 		elif (self.mode == Modes.full):
 			try:

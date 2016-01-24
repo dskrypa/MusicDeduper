@@ -185,7 +185,7 @@ class MusicCollection():
 		
 		dfmt = "{}/{}/{}/";														#Format string for the file's new directory
 		dfmt2 = "{}/{}/{}/{}.mp3";
-		newPath = dfmt.format(self.dir, artist, album, filename);
+		newPath = dfmt2.format(self.dir, artist, album, filename);
 		self.alog.write(song.getPath(), newPath);
 		
 		song.setNewPath(dfmt.format(self.dir, artist, album), filename+".mp3");	#Save the new dir and name in the Song object
@@ -366,7 +366,7 @@ class Song():
 		if (len(val) == 1):
 			aval = val.encode("ascii", "ignore").decode();
 			val = "" if (aval == "") else val;
-		return "Unknown" if (val == "") else val;
+		return "Unknown" if (val == "") else val.replace(u'\0096', "-");
 	#/getClean
 	
 	def move(self):
