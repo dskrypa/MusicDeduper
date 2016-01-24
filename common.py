@@ -1,12 +1,11 @@
-#!/usr/bin/python3
-
 '''
 Author: Douglas Skrypa
-Date: 2016.01.09
-Version: 1.2
+Date: 2016.01.24
+Version: 1.3
 '''
 
-import os, shutil, sys, time, re;
+from __future__ import division;
+import os, sys, time, re;
 
 def getPaths(path):
 	'''
@@ -36,25 +35,32 @@ def fTime(seconds):
 	seconds -= (minutes * 60);
 	hours = int(minutes / 60);
 	minutes -= (hours * 60);
-	return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds);
-	#return time.strftime("%H:%M:%S",time.gmtime(seconds));						#Return a string representation of the given number of seconds as HH:MM:SS
+	return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds);				#Return a string representation of the given number of seconds as HH:MM:SS
 #/fTime
+
+def byteFmt(byteCount):
+	labels = ['B','KB','MB','GB','TB'];
+	bc = byteCount;
+	c = 0;
+	while ((bc > 1024) and (c < 4)):
+		bc /= 1024;
+		c += 1;
+	return "{:,.2f} {}".format(bc, labels[c]);
+#/byteFmt
 
 class PerfTimer():
 	'''Simple performance monitor including a timer and counters'''
 	def __init__(self):
-		self.start = time.perf_counter();										#Initialize the timer with the current time
+		self.now = time.time if (sys.version_info.major == 2) else time.perf_counter;
+		self.start = self.now();												#Initialize the timer with the current time
 	#/init
-
 	def time(self):
-		return time.perf_counter();												#Return the current time using the same method as the internal timer
+		return self.now();														#Return the current time using the same method as the internal timer
 	#/time	
-	
 	def elapsed(self, since=None):
 		sinceTime = self.start if (since == None) else since;
-		return time.perf_counter() - sinceTime;									#Return the time delta in seconds since initialization
+		return self.now() - sinceTime;											#Return the time delta in seconds since initialization
 	#/elapsed
-	
 	def elapsedf(self):
 		return time.strftime("%H:%M:%S",time.gmtime(self.elapsed()));			#Return the time delta as a string in the form HH:MM:SS
 	#/elapsedf
@@ -62,24 +68,20 @@ class PerfTimer():
 
 class clio():
 	'''Command Line Interface Output'''
+	lml = 0;																	#Last message length
 	@classmethod
 	def _fmt(cls, msg):
 		'''Format the given message for overwriting'''
-		tcols = shutil.get_terminal_size()[0];									#Number of text character columns available in the terminal window
-		blanks = "";
-		smsg = str(msg);														#Make sure the input is a string
-		fc = tcols - len(smsg);													#Determine the number of columns need to be filled after the given message
-		if (fc > 0):
-			blanks = " " * fc;
-		#/if
-		if (len(smsg) > tcols):
-			smsg = smsg[:tcols-1];
-		return "\r" + smsg + blanks;
+		mlen = len(msg);														#Length of the current message
+		suffix = " " * (clio.lml - mlen) if (mlen < clio.lml) else "";			#Fill with only as many spaces are necessary to hide the last message
+		clio.lml = mlen;														#Store the current message's length as the last message length
+		return "\r" + msg + suffix;												#\r to return to the beginning of the line
 	#/fmt
 	@classmethod
 	def show(cls, msg=""):
 		'''Display overwritable message'''
-		sys.stdout.write(cls._fmt(msg));
+		fmsg = cls._fmt(msg);
+		sys.stdout.write(fmsg);
 		sys.stdout.flush();
 	#/show
 	@classmethod
@@ -91,7 +93,8 @@ class clio():
 	@classmethod
 	def println(cls, msg=""):
 		'''Display message on a new line'''
-		sys.stdout.write(cls._fmt(msg) + "\n");
+		fmsg = cls._fmt(msg) + "\n";
+		sys.stdout.write(fmsg);
 		sys.stdout.flush();
 	#/println
 	@classmethod

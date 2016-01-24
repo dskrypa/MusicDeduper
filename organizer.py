@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.01.03
-Version: 1.7
+Date: 2016.01.09
+Version: 2
 '''
 
 import os, sys, shutil, time, hashlib, re, glob;
@@ -14,27 +14,31 @@ def main(args):
 	sdir = "/media/user/IntelSSD/unduped_audio_hash/";
 	ddir = "/media/user/IntelSSD/organized/";
 	lpath = "/home/user/temp/organizer.log";
+	alpath = "/home/user/temp/ActionLog.log";
 	
 	#sdir = "/home/user/temp/src/";
 	#ddir = "/home/user/temp/dest/";
 	#lpath = "/home/user/temp/organizer.log";
 	
-	mc = MusicCollection(ddir, lpath);
-	mc.addSongs(sdir, True, True);
+	mc = MusicCollection(ddir, lpath, alpath);
+	mc.addSongs(sdir, False, False);
 	#mc.executeMoves();
 #/main
 
 class MusicCollection():
-	def __init__(self, ddir, lpath):
+	def __init__(self, ddir, lpath, alpath):
 		self.errlog = ErrorLog(lpath);											#Initialize an ErrorLog at the given path
 		self.log = self.errlog.record;											#Create a shortcut for convenience 
 		self.dir = ddir[:-1] if (ddir[-1:] == "/") else ddir;					#Save the given directory path
 		self.col = {};															#Initialize the collection dictionary
+		self.alog = ActionLog(alpath);
 		
 		self.allSongs = [];
 		
 		self.initializing = True;
 		self.pparser = re.compile(r'^/([^/]+)/([^/]+)/(.*).mp3$', re.IGNORECASE);
+		self.feat = re.compile(r'(.+?)\s+feat.+', re.IGNORECASE);
+		self.compilations = {"Billboard":"Billboard", "Now Thats What I Call Music":"NowCompilations"};
 		self.addSongs(self.dir, False, False);									#Scan the destination directory, take no action on the files found
 		self.initializing = False;
 	#/init
@@ -60,10 +64,9 @@ class MusicCollection():
 			if ((fmax > 0) and (c >= fmax)):									#If a maximum file count was set, and that many files have been processed, stop
 				break;
 			c += 1;																#Increment the counter
-			dt = pt.elapsed();													#Get the time delta
-			
 			rpath = path[blen:];												#Current path relative to the given base directory
 			
+			dt = pt.elapsed();													#Get the time delta
 			rate = c/dt;
 			remaining = fTime((t-c) / rate);
 			
@@ -131,10 +134,41 @@ class MusicCollection():
 		title = song.getClean("Title");											#Get the given song's title
 		fname = "{} - {}".format(tnum, title);									#Set the file name to be TrackNumber - TrackName
 		
-		if ("Unknown" in (artist, album, title)):								#If any field is unknown
-			artist = "Unknown";													#Treat artist as unknown
-			album = "Unknown";													#And album as unknown
+		isCompilation = False;
+		for cname in self.compilations:											#Iterate through the possible compilation prefixes
+			if (album.lower().startswith(cname.lower())):						#If the album name indicates that this is a compilation
+				artist = self.compilations[cname];								#Use the given name instead of the artist's name
+				isCompilation = True;											#Note that the artist was set here
+				break;															#If it was a compilation, it won't be another as well
+		#/check common compilation prefixes
+		
+		usingAlbumArtist = False;
+		if (not isCompilation):
+			aartist = song.getClean("Album Artist");
+			if (aartist != "Unknown"):											#If Album Artist is set
+				if (aartist.lower().startswith("various")):						#If it starts with "Various"
+					artist = "Various Artists";									#Normalize it to put them all in one folder
+					usingAlbumArtist = True;
+				elif (aartist != artist):										#If the Album Artist is different than the Artist
+					artist = aartist;											#Use the Album Artist
+					usingAlbumArtist = True;
+		#/if not a compilation
+		
+		featOther = False;
+		if ((not isCompilation) and (not usingAlbumArtist)):
+			featMatcher = self.feat.match(artist);
+			if (featMatcher):
+				artist = featMatcher.group(1);
+				featOther = True;
+		#/featuring check
+		
+		unknownTitle = False;
+		#if ("Unknown" in (artist, album, title)):								#If any field is unknown
+			#artist = "Unknown";													#Treat artist as unknown
+			#album = "Unknown";													#And album as unknown
+		if (title == "Unknown"):
 			fname = song.getFileName()[:-4];									#And set the file name to be the same as before (ignore extension for now)
+			unknownTitle = True;
 		if not (artist in self.col):											#If the artist did not already exist in this collection
 			self.col[artist] = {};												#Add a dictionary for it
 		if not (album in self.col[artist]):										#If the album did not already exist for this artist
@@ -150,7 +184,12 @@ class MusicCollection():
 		self.allSongs.append(song);
 		
 		dfmt = "{}/{}/{}/";														#Format string for the file's new directory
+		dfmt2 = "{}/{}/{}/{}.mp3";
+		newPath = dfmt2.format(self.dir, artist, album, filename);
+		self.alog.write(song.getPath(), newPath);
+		
 		song.setNewPath(dfmt.format(self.dir, artist, album), filename+".mp3");	#Save the new dir and name in the Song object
+		song.setFlags(isCompilation, usingAlbumArtist, featOther, unknownTitle);
 		
 		if action:																#If action should be taken,
 			return self.tryMove(song);
@@ -211,7 +250,9 @@ class Song():
 	t1 = re.compile(r'^Tag 1:.*');												#Regex for ID3v1 lines
 	t2 = re.compile(r'^Tag 2:.*');												#Regex for ID3v2 lines
 	kv = re.compile(r'^\s\s(.*?)\s\s(.*)$');									#Regex for key:value lines
-		
+	
+	flagStrs = {"isCompilation": "[COMP]", "usingAlbumArtist": "[AART]", "featOther": "[FEAT]", "unknownTitle": "[UNKT]"};
+	
 	def __init__(self, path, movable=False):
 		self.path = path;														#Save the location of this song
 		self.attrs1 = {};														#Initialize a dictionary to store ID3v1 attributes
@@ -219,7 +260,23 @@ class Song():
 		self.movable = movable;													#Whether or not this Song should be moved
 		self.newDir = None;														#New directory to be placed in
 		self.newName = None;													#New file name to use
+		self.flags = {};
 	#/init
+
+	def setFlags(self, isCompilation, usingAlbumArtist, featOther, unknownTitle):
+		self.flags = {
+			"isCompilation":isCompilation,	"usingAlbumArtist":usingAlbumArtist,
+			"featOther":featOther,			"unknownTitle":unknownTitle
+		};
+	#/setFlags
+	
+	def getFlags(self):
+		flagstr = "";
+		for flag in self.flags:
+			if self.flags[flag]:
+				flagstr += Song.flagStrs[flag];
+		return flagstr;
+	#/getFlags
 
 	def isMovable(self):
 		return self.movable;
@@ -309,7 +366,7 @@ class Song():
 		if (len(val) == 1):
 			aval = val.encode("ascii", "ignore").decode();
 			val = "" if (aval == "") else val;
-		return "Unknown" if (val == "") else val;
+		return "Unknown" if (val == "") else val.replace(u'\0096', "-");
 	#/getClean
 	
 	def move(self):
@@ -329,6 +386,42 @@ class Song():
 			os.rename(self.path, newpath);	
 	#/moveSong
 #/song
+
+class ActionLog():
+	headers = ["Original","Destination"];
+	fmt = "{}\t{}\n";
+	def __init__(self, path):
+		psplit = os.path.splitext(path);
+		pathA = psplit[0];
+		ext = psplit[1];
+		c = 0;
+		while (os.path.isfile(pathA + ext)):
+			pathA = psplit[0] + str(c);
+			c += 1;
+		#/while
+		self.path = pathA + ext;
+		self.file = open(self.path, "w");
+		self.paths = {};
+	#/init
+	
+	def act(self):
+		for path in self.paths:
+			oldPath = path;
+			newPath = self.paths[path];
+			print("{} -> {}".format(oldPath, newPath));
+			os.renames(oldPath, newPath);
+	#/act
+	
+	def write(self, *args):
+		self.paths[args[0]] = args[1];
+		self.file.write(self.fmt.format(*args));
+		self.file.flush();
+	#/write
+	
+	def close(self):
+		self.file.close();
+	#/close
+#/ActionLog
 
 if __name__ == "__main__":
 	main(sys.argv);
