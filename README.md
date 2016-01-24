@@ -33,12 +33,21 @@ After playing around with Mutagen for a bit, I switched to eyeD3.  EyeD3 let me 
 When I switched to eyeD3, I had to also switch to Python 2 due to a BytesIO/StringIO implementation discrepancy between them, though I don't remember the exact problem at the moment.  I could probably fix it to work with Python 3 in the edited version of eyeD3, but I haven't gone back to do so yet.  Switching to Python 2 required some adjustments for compatibility.
 
 Files:
-dedupe.py		Scans a source directory for mp3s, and copies "unique" files to the destination directory.
-tagRemover.py	POC script that led to the improvement of dedupe.py
-organizer.py	Organizes a given folder using ID3 data to generate folder structure.  Needs to be updated to use eyeD3/mutagen.
-reorganizer.py	Similar to organizer... Both files need to be cleaned up
-common.py		Some common functions used in most of these scripts.
-_constants.py	Arrays of standard ID3 info, such as genre mappings for ID3v1 and mappings of tag IDs to readable descriptions.
-info.py			Prints a list of ID3 tags in use in the files in the given path, and a count of each one
-tagmgr.py		Intended to remove tags specified at runtime; ID3v1 limitation of Mutagen realized before continuing
-tagmgr2.py		Same intention as above; implemented with eyeD3, only able to read tags at the moment.
+   * dedupe.py
+      * Scans a source directory for mp3s, and copies "unique" files to the destination directory.
+   * tagRemover.py
+      * POC script that led to the improvement of dedupe.py
+   * organizer.py
+      * Organizes a given folder using ID3 data to generate folder structure.  Needs to be updated to use eyeD3/mutagen.
+   * reorganizer.py
+      * Similar to organizer... Both files need to be cleaned up
+   * common.py
+      * Some common functions used in most of these scripts.
+   * _constants.py
+      * Arrays of standard ID3 info, such as genre mappings for ID3v1 and mappings of tag IDs to readable descriptions.
+   * info.py
+      * Prints a list of ID3 tags in use in the files in the given path, and a count of each one
+   * tagmgr.py
+      * Intended to remove tags specified at runtime; ID3v1 limitation of Mutagen realized before continuing
+   * tagmgr2.py
+      * Same intention as above; implemented with eyeD3, only able to read tags at the moment.
