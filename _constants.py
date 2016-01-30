@@ -2,13 +2,44 @@
 v1_fields = ["title","artist","album","year","comment","track","genre"];
 
 tagTypes= {
+	#iTunes Verified Fields
+	"TIT2": "Song title",
+	"TALB": "Album",
+	"TPE2": "Album Artist",
+	"TPE1": "Artist",
+	
+	"TCOM": "Composer",
+	"TRCK": "Track number",
+	"TPOS": "Disk Number",
+	"TCON": "Genre",
+	"TYER": "Year",																#V2.3
+	
+	"USLT": "Lyrics",
+	"TIT1": "Grouping",
+	"TBPM": "BPM (beats per minute)",
+	"TCMP": "Compilation (boolean)",											#iTunes only
+	"TSOC": "Composer [for sorting]",											#iTunes only
+	"TSO2": "Album Artist [for sorting]",										#iTunes only
+	"TSOT": "Song title [for sorting]",
+	"TSOA": "Album [for sorting]",
+	"TSOP": "Artist [for sorting]",
+	
+	"TENC": "Encoded by",
+	
+	#iTunes-only Fields
+	"TDES": "Podcast Description",
+	"TGID": "Podcast Identifier",
+	"WFED": "Podcast URL",
+	"PCST": "Podcast Flag",
+	
+	#General Fields
 	"AENC": "Audio encryption",
 	"APIC": "Album Cover",
 	"ASPI": "Audio seek point index",
 	"COMM": "Comments",
 	"COMR": "Commercial frame",
 	"ENCR": "Encryption method registration",
-	"EQUA": "Equalisation",														#V2.3	
+	"EQUA": "Equalisation",														#V2.3
 	"EQU2": "Equalisation (2)",													#V2.4
 	"ETCO": "Event timing codes",
 	"GEOB": "General encapsulated object",
@@ -29,32 +60,21 @@ tagTypes= {
 	"SIGN": "Signature frame",
 	"SYLT": "Synchronised lyric/text",
 	"SYTC": "Synchronised tempo codes",
-	"TALB": "Album",
-	"TBPM": "BPM (beats per minute)",
-	"TCOM": "Composer",
-	"TCON": "Genre",
 	"TCOP": "Copyright message",
 	"TDEN": "Encoding time",
-	"TDLY": "Playlist delay",
-	
+	"TDLY": "Playlist delay",	
 	"TORY": "Original release year",											#V2.3
 	"TDOR": "Original release time",											#V2.4
 	"TDAT": "Date",																#V2.3
 	"TIME": "Time",																#V2.3
-	"TYER": "Year",																#V2.3
 	"TRDA": "Recording Date",													#V2.3
 	"TDRC": "Date",																#V2.4
 	"TDRL": "Release time",
 	"TDTG": "Tagging time",
-	
-	"TENC": "Encoded by",
 	"TEXT": "Lyricist/Text writer",
 	"TFLT": "File type",
 	"IPLS": "Involved people list",												#V2.3
 	"TIPL": "Involved people list",												#V2.4
-	
-	"TIT1": "Content group description",
-	"TIT2": "Title",
 	"TIT3": "Subtitle/Description refinement",
 	"TKEY": "Initial key",
 	"TLAN": "Language(s)",
@@ -67,29 +87,18 @@ tagTypes= {
 	"TOLY": "Original lyricist(s)/text writer(s)",
 	"TOPE": "Original artist(s)/performer(s)",
 	"TOWN": "File owner/licensee",
-	
-	"TPE1": "Artist",
-	"TPE2": "Performer",
 	"TPE3": "Conductor",
 	"TPE4": "Interpreted, remixed, or otherwise modified by",
-	"TPOS": "Disk Number",
 	"TPRO": "Produced notice",
 	"TPUB": "Publisher",
-	"TRCK": "Track number",
-	
 	"TRSN": "Internet radio station name",
 	"TRSO": "Internet radio station owner",
-	"TSOA": "Album sort order",
-	"TSOP": "Performer sort order",
-	"TSOT": "Title sort order",
 	"TSRC": "ISRC (international standard recording code)",
 	"TSSE": "Encoding Settings",
 	"TSST": "Set subtitle",
 	"TXXX": "User-defined",
 	"UFID": "Unique file identifier",
 	"USER": "Terms of use",
-	"USLT": "Unsynchronised lyric/text transcription",
-	
 	"WCOM": "Commercial info",
 	"WCOP": "Copyright/Legal info",
 	"WOAF": "Audio file's website",
@@ -100,9 +109,7 @@ tagTypes= {
 	"WPUB": "Publisher's website",
 	"WXXX": "User-defined URL",
 	
-	"TCMP": "iTunes Compilation Flag",
-	"TSOC": "iTunes Composer Sort Order",
-	"TSO2": "iTunes Album Artist Sort Order",
+	#Deprecated
 	"TSIZ": "Size"																#Deprecated in V2.4
 };
 

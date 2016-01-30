@@ -4,7 +4,7 @@ Date: 2016.01.24
 Version: 1.3
 '''
 
-from __future__ import division;
+from __future__ import division, unicode_literals;
 import os, sys, time, re;
 
 def getPaths(path):
@@ -75,7 +75,7 @@ class clio():
 		mlen = len(msg);														#Length of the current message
 		suffix = " " * (clio.lml - mlen) if (mlen < clio.lml) else "";			#Fill with only as many spaces are necessary to hide the last message
 		clio.lml = mlen;														#Store the current message's length as the last message length
-		return "\r" + msg + suffix;												#\r to return to the beginning of the line
+		return '\r' + msg + suffix;												#\r to return to the beginning of the line
 	#/fmt
 	@classmethod
 	def show(cls, msg=""):
