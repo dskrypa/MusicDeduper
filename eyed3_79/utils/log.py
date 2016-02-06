@@ -35,7 +35,7 @@ class Logger(logging.Logger):
 
         # Using propogation of child to parent, by default
         self.propagate = True
-        self.setLevel(logging.NOTSET)
+        self.setLevel(logging.CRITICAL)
 
     def verbose(self, msg, *args, **kwargs):
         '''Log \a msg at 'verbose' level, debug < verbose < info'''
@@ -65,7 +65,7 @@ def initLogging():
     console_handler.setFormatter(logging.Formatter(DEFAULT_FORMAT))
     log.addHandler(console_handler)
 
-    log.setLevel(logging.WARNING)
+    log.setLevel(logging.CRITICAL)
 
     return log
 
