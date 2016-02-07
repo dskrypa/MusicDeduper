@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.02.07
-Version: 4.3
+Version: 4.4
 '''
 
 from __future__ import division, unicode_literals;
@@ -108,8 +108,7 @@ def main():
 		compStr = " [Compilation]" if song.hasTag("TCMP") else "";
 		
 		if removeMode:
-			for rtag in toRemove:
-				song.remTag(rtag, toRemove[rtag]);
+			song.remTags(toRemove);
 		
 		if args.trim:
 			changed = song.trimTags();

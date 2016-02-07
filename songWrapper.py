@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.02.07
-Version: 1.3
+Version: 1.4
 '''
 
 from __future__ import division;
@@ -177,23 +177,26 @@ class Song():
 		self.versions[tver] = True;
 	#/_addTagInfo
 	
-	def remTag(self, tagid, id3v=None):
+	def remTags(self, toRemove):
 		if self._isBadFile: return;
-		if (tagid in self.tagsById):
-			if (id3v != None):
-				ev = (int(id3v),None,None);
-				af = eyed3.load(self.fpath, ev);
-				if (af.tag == None): return;
-				af.tag.frame_set.pop(tagid);
-				af.tag.save(version=(2,4,0));
-			else:
-				for ver in self.getVersions(tagid):
-					ev = (int(ver),None,None);
-					af = eyed3.load(self.fpath, ev);
-					af.tag.frame_set.pop(tagid);
-					af.tag.save(version=(2,4,0));
+		for v in range(2, 0, -1):												#Check V2 then V1
+			changed = False;
+			af = eyed3.load(self.fpath, (v,None,None));							#Load the tags for the selected version
+			if (af.tag != None):												#If there are any tags
+				for tagid in toRemove:											#Iterate through the tags to be removed
+					trv = toRemove[tagid];										#Get the version to be removed
+					if (trv == None) or (int(trv) == v):						#If the version isn't set or matches the selected version
+						if (tagid in af.tag.frame_set):							#If the tag id is present in the file
+							af.tag.frame_set.pop(tagid);						#Remove it
+							changed = True;										#Indicate that a change was made that should be saved
+				if changed:														#If a change was made
+					atv = af.tag.version;										#Check the version number of the tag
+					if (atv[0] == 2):											#If it's version 2
+						af.tag.save(version=(2,4,0));							#Save as version 2.4
+					else:														#Otherwise if it's version 1
+						af.tag.save(version=atv);								#Save as its original version
 		self.updateTags();
-	#/remTag
+	#/remV1Tags
 	
 	def getArtist(self):		return self.getTagVal("TPE1");
 	def getAlbumArtist(self):	return self.getTagVal("TPE2");

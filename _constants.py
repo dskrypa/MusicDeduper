@@ -110,7 +110,11 @@ tagTypes= {
 	"WXXX": "User-defined URL",
 	
 	#Deprecated
-	"TSIZ": "Size"																#Deprecated in V2.4
+	"TSIZ": "Size",																#Deprecated in V2.4
+	
+	#Invalid tags discovered
+	"ITNU": "iTunesU? [invalid]",
+	"TCAT": "Podcast Category? [invalid]",
 };
 
 v1_genres = [
