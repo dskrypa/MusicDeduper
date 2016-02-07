@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.02.06
-Version: 1.2
+Date: 2016.02.07
+Version: 1.3
 '''
 
 from __future__ import division;
@@ -60,12 +60,35 @@ class Song():
 	gpat = re.compile(r'\D*(\d+).*');
 	def __init__(self, fpath):
 		self.fpath = fpath;
+		self._isBadFile = False;
+		self.newPath = None;
+		self.better = None;
+		self.bitrate = None;
 		self.updateTags();
-		self.isBadFile = False;
 	#/init
 	
+	def setBetter(self, isBetter):
+		self.better = isBetter;
+	#/setBetter
+	
+	def isBetter(self):
+		return self.better;
+	#/isBetter
+	
+	def getNewPath(self):
+		return self.newPath;
+	#/getNewPath
+	
+	def setNewPath(self, newPath):
+		self.newPath = newPath;
+	#/setNewPath
+	
+	def getBitrate(self):
+		return self.bitrate;
+	#/getBitrate
+	
 	def isBad(self):
-		return self.isBadFile;
+		return self._isBadFile;
 	#/idBad
 	
 	def updateTags(self):
@@ -75,8 +98,8 @@ class Song():
 		try:
 			self._addTagsFromAudioFile(eyed3.load(self.fpath, (1,None,None)));
 			self._addTagsFromAudioFile(eyed3.load(self.fpath, (2,None,None)));
-		except ValueError as e:
-			self.isBadFile = True;
+		except (ValueError, SongException) as e:
+			self._isBadFile = True;
 	#/updateTags
 	
 	def trimTags(self):
@@ -122,6 +145,11 @@ class Song():
 	
 	def _addTagsFromAudioFile(self, af):
 		if (af.tag == None): return;
+		if (af.info != None):
+			self.bitrate = af.info.mp3_header.bit_rate;
+		else:
+			clio.println("No Audio info for: " + self.fpath);
+			raise SongException("No Audio Info");
 		fs = af.tag.frame_set;
 		ver = af.tag.version;
 		tver = ver[0] + (ver[1]/10);
@@ -141,7 +169,6 @@ class Song():
 					return;														#ID3v1 genres have a limited valid range of index values
 				else:
 					content = v1_genres[gid];
-		
 		st = SongTag(tid, tver, content)
 		self.tags.append(st);
 		if not (tid in self.tagsById):
@@ -151,7 +178,7 @@ class Song():
 	#/_addTagInfo
 	
 	def remTag(self, tagid, id3v=None):
-		if self.isBadFile: return;
+		if self._isBadFile: return;
 		if (tagid in self.tagsById):
 			if (id3v != None):
 				ev = (int(id3v),None,None);
@@ -221,7 +248,6 @@ class Song():
 	def hasMultipleVersionsOf(self, tagid):
 		if (not (len(self.versions) > 1)) or (tagid not in self.tagsById):
 			return False;
-		
 		ver = 0;
 		for tag in self.tagsById[tagid]:
 			ver = tag.ver if (ver == 0) else ver;

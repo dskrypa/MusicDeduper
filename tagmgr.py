@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.02.06
-Version: 4.2
+Date: 2016.02.07
+Version: 4.3
 '''
 
 from __future__ import division, unicode_literals;
@@ -36,6 +36,8 @@ def main():
 	parser.add_argument("--verbose", "-v", help="Print more info about what is happening", action="store_true", default=False);
 	parser.add_argument("--limit", "-l", metavar="N", type=int, help="Limit the number of songs' info that is printed", default=-1);
 	parser.add_argument("--trim", "-t", help="Trim leading and trailing spaces in primary tags.", action="store_true", default=False);
+	parser.add_argument("--analyzeDupes", "-a", help="Print a list of songs that are duplicates based on metadata", action="store_true", default=False);
+	parser.add_argument("--undupe", "-u", help="Change destinations based on duplicate metadata", action="store_true", default=False);
 	args = parser.parse_args();
 	
 	print(args);
@@ -82,6 +84,8 @@ def main():
 		pmgr = PlacementManager(args.copy);
 		reorganize = True;
 		copyMode = True;
+	elif args.analyzeDupes:
+		pmgr = PlacementManager(None);
 	
 	efmt = (('cp' if copyMode else 'mv') + ' "{}" "{}"\n') if export else None;	#Set the export format string
 	paths = getFilteredPaths(args.dir, "mp3");
@@ -143,26 +147,43 @@ def main():
 					if ((tid in toShow) and ((toShow[tid] == None) or (int(tag["ver"]) == toShow[tid]))):
 						clio.printf(tfmt, tag, tagTypes[tid]);
 		
-		if (args.printTags or showFilter) and limit:
-			if (args.limit <= c):
-				break;
-		
 		if reorganize:
 			opath, npath = pmgr.addSong(song);
 			if export and (npath != None):
 				efile.write(efmt.format(opath, npath));
+		elif args.analyzeDupes:
+			pmgr.addSong(song);
+			
+		if limit and (args.limit <= c):
+			break;
 	#/for processing files
 	
 	if reorganize:
-		moves = pmgr.getMoves();
+		if args.undupe:
+			moves = pmgr.analyzeSongs();
+			for opath in moves:
+				song = moves[opath];
+				better = song.isBetter();
+				if (better != None):
+					basedir = args.copy if copyMode else args.move;
+					basedir = basedir[:-1] if (basedir[-1:] == "/") else basedir;
+					npath = song.getNewPath();
+					npath = opath if (npath == None) else npath;
+					rpath = npath[len(basedir):]; 
+					dpath = "/dupe_better" if better else "/dupe_worse";
+					moves[opath].setNewPath(basedir + dpath + rpath);
+		else:
+			moves = pmgr.getMoves();
+		
 		if args.noaction:			
 			for orig in moves:
-				dest = moves[orig];
-				clio.printf(rfmt, orig, dest);
+				dest = moves[orig].getNewPath();
+				if (dest != None):
+					clio.printf(rfmt, orig, dest);
 		else:
 			func = shutil.copy if copyMode else os.renames;
 			for orig in moves:
-				dest = moves[orig];
+				dest = moves[orig].getNewPath();
 				
 				if (dest != None):				
 					spos = dest.rfind("/");
@@ -175,9 +196,13 @@ def main():
 						func(orig, dest);
 					else:
 						clio.println("Invalid path: " + dest);
-				else:
-					clio.println("Matching file exists in destination: " + orig);
+				#else:
+				#	clio.println("Matching file exists in destination: " + orig);
+	
+	if args.analyzeDupes:
+		pmgr.analyzeSongs(True);
 	#/reorganize
+	
 	clio.println();
 #/main
 
@@ -194,7 +219,11 @@ def getWidths(dict):
 
 class PlacementManager():
 	def __init__(self, ddir):
-		self.ddir = ddir[:-1] if (ddir[-1:] == "/") else ddir;
+		self.analyzeOnly = (ddir == None);
+		if not self.analyzeOnly:
+			self.ddir = ddir[:-1] if (ddir[-1:] == "/") else ddir;
+		else:
+			self.ddir = "";
 		self.mdir = self.ddir + "/mismatches/";
 		self.cdir = self.ddir + "/compilations/";
 		self.pdir = self.ddir + "/podcasts/";
@@ -203,7 +232,39 @@ class PlacementManager():
 		self.fdir = self.ddir + "/bad_files/";
 		self.moves = {};														#Store paths as new:old for easy destination conflict check
 		self.movez = {};
+		self.songs = {};
 	#/init
+	
+	def analyzeSongs(self, display=False):
+		#self.songs[xartist][album][title]
+		clio.println();
+		fmt = "{}\t{}\t{}\t{}\t{}\t{}\t{}";
+		if display:
+			print("Copy\tBest\tBitrate\tArtist\tAlbum\tTitle\tPath");
+		#dupes = [];
+		for artist in self.songs:
+			for album in self.songs[artist]:
+				for title in self.songs[artist][album]:
+					scount = len(self.songs[artist][album][title]);
+					if (scount > 1):
+						#dupes.append(self.songs[artist][album][title]);
+						dupez = [];
+						bitrates = [];
+						for s in range(scount):
+							song = self.songs[artist][album][title][s];
+							br = song.getBitrate();
+							bitrates.append(br);
+							dupez.append([br, song.fpath]);
+						brmax = max(bitrates);
+						for s in range(scount):
+							br, fpath = dupez[s];
+							best = (br == brmax);
+							oldPath = self.songs[artist][album][title][s].fpath;
+							self.moves[oldPath].setBetter(best);
+							if display:
+								print(fmt.format(s, best, br, artist, album, title, fpath));
+		return self.moves;
+	#/analyzeSongs
 	
 	def getMoves(self):
 		return self.moves;
@@ -212,7 +273,9 @@ class PlacementManager():
 	def addSong(self, song):
 		npath = self.getNewPath(song);
 		self.movez[npath] = song.fpath;
-		self.moves[song.fpath] = npath;
+		#self.moves[song.fpath] = npath;
+		song.setNewPath(npath);
+		self.moves[song.fpath] = song;
 		return (song.fpath, npath);
 	#/addSong
 	
@@ -264,6 +327,15 @@ class PlacementManager():
 				npath = "{}{}".format(self.cdir, album[:255]);
 			else:
 				npath = "{}{}/{}".format(ndir, xartist[:255], album[:255]);
+			
+			if (xartist not in self.songs):
+				self.songs[xartist] = {};
+			if (album not in self.songs[xartist]):
+				self.songs[xartist][album] = {};
+			if (title not in self.songs[xartist][album]):
+				self.songs[xartist][album][title] = [];
+			self.songs[xartist][album][title].append(song);
+			
 			return self.getUnusedName(song, npath, fname, "mp3");
 	#/getNewPath
 
@@ -283,6 +355,8 @@ class PlacementManager():
 		shash = None;															#Song Hash, if necessary for preventing duplicates
 		while ((fpath in self.movez) or (os.path.exists(fpath))):
 			if os.path.exists(fpath):
+				if (fpath == song.fpath):										#If this is the same file, then it shouldn't be moved
+					return None;
 				if (shash == None):
 					shash = hashlib.sha512(open(song.fpath,"rb").read()).hexdigest();
 				fhash = hashlib.sha512(open(fpath,"rb").read()).hexdigest();

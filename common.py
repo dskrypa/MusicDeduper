@@ -1,7 +1,7 @@
 '''
 Author: Douglas Skrypa
-Date: 2016.02.06
-Version: 1.5
+Date: 2016.02.07
+Version: 1.6
 '''
 
 from __future__ import division, unicode_literals;
@@ -19,6 +19,9 @@ else:
 #/if Python 2.x
 
 import time, re;
+
+_badpath = re.compile(u'[\u0000-\u001F\u007F-\u009F/$!@#<>"\'|:*%?\\\\]', re.U);
+
 
 def getPaths(path):
 	'''
@@ -68,7 +71,7 @@ def cleanup(strng):
 	'''Returns a string that is usable in a file name, else None'''
 	if (strng == None) or (len(strng) < 1):
 		return None;
-	pass1 = re.sub(r'[/$!@#<>"\'|:*%?\\]','',strng);							#Remove any characters invalid in filenames
+	pass1 = _badpath.sub('', strng);											#Remove any characters invalid in filenames
 	pass2 = re.sub(r'\s+',' ',pass1).strip();									#Remove extraneous spaces
 	return pass2 if (len(pass2) > 0) else None;
 #/cleanup
