@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.02.06
-Version: 4.1
+Version: 4.2
 '''
 
 from __future__ import division, unicode_literals;
@@ -34,6 +34,8 @@ def main():
 	parser.add_argument("--export", "-e", metavar="destination", help="Write commands that should be performed to the specified file instead of executing them.");
 	parser.add_argument("--noaction", "-n", help="Don't move any files, just print where they would go", action="store_true", default=False);
 	parser.add_argument("--verbose", "-v", help="Print more info about what is happening", action="store_true", default=False);
+	parser.add_argument("--limit", "-l", metavar="N", type=int, help="Limit the number of songs' info that is printed", default=-1);
+	parser.add_argument("--trim", "-t", help="Trim leading and trailing spaces in primary tags.", action="store_true", default=False);
 	args = parser.parse_args();
 	
 	print(args);
@@ -66,6 +68,8 @@ def main():
 			export = True;
 			efile = open(args.export, "w", encoding="utf-8");
 	
+	limit = (args.limit > -1);
+	
 	reorganize = False;
 	copyMode = False;
 	if (args.move != None) and (args.copy != None):
@@ -80,31 +84,39 @@ def main():
 		copyMode = True;
 	
 	efmt = (('cp' if copyMode else 'mv') + ' "{}" "{}"\n') if export else None;	#Set the export format string
-	
 	paths = getFilteredPaths(args.dir, "mp3");
 	rfmt = "{:" + str(max([len(p) for p in paths])) + "} -> {}";				#Set the reorganize format string
-	
 	c = 0;
 	t = len(paths);
-	spfmt = "[{:7.2%}|{:"+str(len(str(t)))+"d}/"+str(t)+"][Elapsed: {}]";
-	spfmt += "[Rate: {:,.2f} files/sec][Remaining: ~{}] Current file: {}";
+	spfmt = "[{}][{:7.2%}|{:"+str(len(str(t)))+"d}/"+str(t)+"][{:,.2f} files/sec]Current: {}";
 	pt = PerfTimer();
+	last_time = pt.elapsed();
 	
 	for path in paths:
 		c += 1;
 		dt = pt.elapsed();
 		rate = c/dt;
-		remaining = fTime((t-c) / rate);
-		clio.showf(spfmt, c/t, c, fTime(dt), rate, remaining, path);
+		if ((dt - last_time) > 0.25):
+			last_time = dt;
+			clio.showf(spfmt, fTime(dt), c/t, c, rate, path);
 		
-		#try:
 		song = Song(path);
 		compStr = " [Compilation]" if song.hasTag("TCMP") else "";
 		
 		if removeMode:
 			for rtag in toRemove:
 				song.remTag(rtag, toRemove[rtag]);
-				
+		
+		if args.trim:
+			changed = song.trimTags();
+			if (len(changed) > 0):
+				clio.println();
+				clio.println(path + compStr);
+				cws = getWidths(changed);
+				trmdfmt = "Changed {:" + str(cws[0]) + "}: {}";
+				for chng in changed:
+					clio.printf(trmdfmt, chng, changed[chng]);
+		
 		tags = song.getTags();
 		if args.printTags:
 			clio.println();
@@ -131,13 +143,15 @@ def main():
 					if ((tid in toShow) and ((toShow[tid] == None) or (int(tag["ver"]) == toShow[tid]))):
 						clio.printf(tfmt, tag, tagTypes[tid]);
 		
+		if (args.printTags or showFilter) and limit:
+			if (args.limit <= c):
+				break;
+		
 		if reorganize:
 			opath, npath = pmgr.addSong(song);
 			if export and (npath != None):
 				efile.write(efmt.format(opath, npath));
-			
-		#except Exception as e:
-		#	clio.printf("[ERROR] {}: {}", path, str(e));
+	#/for processing files
 	
 	if reorganize:
 		moves = pmgr.getMoves();
@@ -186,6 +200,7 @@ class PlacementManager():
 		self.pdir = self.ddir + "/podcasts/";
 		self.vdir = self.ddir + "/valid/";
 		self.bdir = self.ddir + "/missing_info/";
+		self.fdir = self.ddir + "/bad_files/";
 		self.moves = {};														#Store paths as new:old for easy destination conflict check
 		self.movez = {};
 	#/init
@@ -206,6 +221,10 @@ class PlacementManager():
 		tagsMismatched = False;
 		oldFname = os.path.basename(song.fpath);
 		
+		if song.isBad():
+			return self.getUnusedName(song, self.fdir, oldFname);
+		#/bad file
+		
 		try:
 			albArtist = cleanup(song.getTagVal("TPE2", True));
 			artist = cleanup(song.getTagVal("TPE1", True));
@@ -213,18 +232,27 @@ class PlacementManager():
 			title = cleanup(song.getTagVal("TIT2", True));
 			tnum = song.getTrack();
 			fields = (artist, album, title);
+			xartist = albArtist if ((albArtist != None) and (len(albArtist) > 0)) else artist;
 		except SongException as e:
 			tagsMismatched = True;
 		
 		if tagsMismatched:
 			return self.getUnusedName(song, self.mdir, oldFname);
 		elif (None in fields) or ("" in fields):
-			return self.getUnusedName(song, self.bdir, oldFname);
+			npath = self.bdir;
+			if (album != None):
+				npath = "{}albums/{}".format(self.bdir, album[:255]);
+			elif (xartist != None):
+				npath = "{}artists/{}".format(self.bdir, xartist[:255]);
+			return self.getUnusedName(song, npath, oldFname);
 		else:
 			if (tnum == None):
 				tn = "XX";
 			else:
-				tn = int(tnum.split("/")[0]) if ("/" in tnum) else int(tnum);
+				try:
+					tn = int(tnum.split("/")[0]) if ("/" in tnum) else int(tnum);
+				except ValueError as verr:
+					return self.getUnusedName(song, self.fdir, oldFname);
 				tn = "{:02}".format(tn);
 			fname = "{} - {}".format(tn, title);
 			
@@ -235,7 +263,6 @@ class PlacementManager():
 			if (song.isFromCompilation() or song.mayBeFromCompilation()):
 				npath = "{}{}".format(self.cdir, album[:255]);
 			else:
-				xartist = albArtist if ((albArtist != None) and (len(albArtist) > 0)) else artist;
 				npath = "{}{}/{}".format(ndir, xartist[:255], album[:255]);
 			return self.getUnusedName(song, npath, fname, "mp3");
 	#/getNewPath

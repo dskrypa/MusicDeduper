@@ -3,7 +3,7 @@
 '''
 Author: Douglas Skrypa
 Date: 2016.02.06
-Version: 1.1
+Version: 1.2
 '''
 
 from __future__ import division;
@@ -61,17 +61,66 @@ class Song():
 	def __init__(self, fpath):
 		self.fpath = fpath;
 		self.updateTags();
+		self.isBadFile = False;
 	#/init
+	
+	def isBad(self):
+		return self.isBadFile;
+	#/idBad
 	
 	def updateTags(self):
 		self.tags = [];
 		self.tagsById = {};
 		self.versions = {};
-		self.addTagsFromAudioFile(eyed3.load(self.fpath, (1,None,None)));
-		self.addTagsFromAudioFile(eyed3.load(self.fpath, (2,None,None)));
+		try:
+			self._addTagsFromAudioFile(eyed3.load(self.fpath, (1,None,None)));
+			self._addTagsFromAudioFile(eyed3.load(self.fpath, (2,None,None)));
+		except ValueError as e:
+			self.isBadFile = True;
 	#/updateTags
 	
-	def addTagsFromAudioFile(self, af):
+	def trimTags(self):
+		changed = {};
+		changed1 = self._trimTags(eyed3.load(self.fpath, (1,None,None)));
+		if (changed1 != None):
+			changed.update(changed1);
+		changed2 = self._trimTags(eyed3.load(self.fpath, (2,None,None)));
+		if (changed2 != None):
+			changed.update(changed2);
+		return changed;
+	#/trimTags
+	
+	def _trimTags(self, af):
+		if (af.tag == None): return None;
+		fs = af.tag.frame_set;
+		ver = af.tag.version;
+		tver = "[" + str(ver[0] + (ver[1]/10)) + "]";
+		
+		s_artist = af.tag.artist.strip() if (af.tag.artist != None) else None;
+		s_aartist = af.tag.album_artist.strip() if (af.tag.album_artist != None) else None;
+		s_title = af.tag.title.strip() if (af.tag.title != None) else None;
+		s_album = af.tag.album.strip() if (af.tag.album != None) else None;
+		
+		changed = {};
+		if (af.tag.artist != s_artist):
+			changed[tver + "Artist"] = "'{}' -> '{}'".format(af.tag.artist, s_artist);
+			af.tag.artist = s_artist;
+		if (af.tag.album_artist != s_aartist):
+			changed[tver + "Album Artist"] = "'{}' -> '{}'".format(af.tag.album_artist, s_aartist);
+			af.tag.album_artist = s_aartist;
+		if (af.tag.title != s_title):
+			changed[tver + "Title"] = "'{}' -> '{}'".format(af.tag.title, s_title);
+			af.tag.title = s_title;
+		if (af.tag.album != s_album):
+			changed[tver + "Album"] = "'{}' -> '{}'".format(af.tag.album, s_album);
+			af.tag.album = s_album;
+		
+		if (len(changed) > 0):
+			af.tag.save();
+		return changed;
+	#/_trimTags
+	
+	def _addTagsFromAudioFile(self, af):
 		if (af.tag == None): return;
 		fs = af.tag.frame_set;
 		ver = af.tag.version;
@@ -79,10 +128,10 @@ class Song():
 		for tid in fs:
 			frames = fs[tid];
 			for frame in frames:
-				self.addTagInfo(tid, tver, frame);
-	#/addTagsFromAudioFile
+				self._addTagInfo(tid, tver, frame);
+	#/_addTagsFromAudioFile
 	
-	def addTagInfo(self, tid, tver, frame):
+	def _addTagInfo(self, tid, tver, frame):
 		content = getFrameContent(frame);
 		if ((tver < 2) and (tid == "TCON")):
 			gmatch = Song.gpat.match(content);
@@ -99,9 +148,10 @@ class Song():
 			self.tagsById[tid] = [];
 		self.tagsById[tid].append(st);
 		self.versions[tver] = True;
-	#/addTagInfo
+	#/_addTagInfo
 	
 	def remTag(self, tagid, id3v=None):
+		if self.isBadFile: return;
 		if (tagid in self.tagsById):
 			if (id3v != None):
 				ev = (int(id3v),None,None);
@@ -137,7 +187,9 @@ class Song():
 			if not tag2.startswith(tag1):
 				if (tid == "TRCK"):												#If it's the track number
 					try:
-						if (int(tag1) != int(tag2)):
+						t1 = normalizeTrack(tag1);
+						t2 = normalizeTrack(tag2);
+						if (t1 != t2):
 							raise SongException("Multiple versions of " + tid);
 					except ValueError as ve:
 						raise SongException("Multiple versions of " + tid);
@@ -241,6 +293,10 @@ def normalizeArtist(artist):
 		return re.sub(r'the (.*)',r'\1, the',norm);
 	return norm;
 #/normalizeArtist
+
+def normalizeTrack(track):
+	return int(track.split("/")[0]) if ("/" in track) else int(track);
+#/normalizeTrack
 
 def getFrameContent(frame):
 	if isinstance(frame, eyed3.id3.frames.ChapterFrame):
