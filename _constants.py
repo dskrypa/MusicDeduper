@@ -115,6 +115,7 @@ tagTypes= {
 	#Invalid tags discovered
 	"ITNU": "iTunesU? [invalid]",
 	"TCAT": "Podcast Category? [invalid]",
+	"MJCF": "MediaJukebox? [invalid]",
 };
 
 v1_genres = [
