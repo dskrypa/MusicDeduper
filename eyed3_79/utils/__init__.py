@@ -37,7 +37,7 @@ _mime_types.readfp(StringIO("%s %s" %
 del mimetypes
 del StringIO
 
-from eyed3 import LOCAL_ENCODING, LOCAL_FS_ENCODING
+from eyed3_79 import LOCAL_ENCODING, LOCAL_FS_ENCODING
 
 from ..utils.log import getLogger
 log = getLogger(__name__)
@@ -93,7 +93,7 @@ def walk(handler, path, excludes=None, fs_encoding=LOCAL_FS_ENCODING):
 
 
 class FileHandler(object):
-    '''A handler interface for :func:`eyed3.utils.walk` callbacks.'''
+    '''A handler interface for :func:`eyed3_79.utils.walk` callbacks.'''
 
     def handleFile(self, f):
         '''Called for each file walked. The file ``f`` is the full path and
@@ -326,9 +326,9 @@ class ArgumentParser(argparse.ArgumentParser):
     options.'''
 
     def __init__(self, *args, **kwargs):
-        from eyed3.info import VERSION_MSG
-        from eyed3.utils.log import LEVELS
-        from eyed3.utils.log import MAIN_LOGGER
+        from eyed3_79.info import VERSION_MSG
+        from eyed3_79.utils.log import LEVELS
+        from eyed3_79.utils.log import MAIN_LOGGER
 
         def pop_kwarg(name, default):
             if name in kwargs:
@@ -385,7 +385,7 @@ class LoggingAction(argparse._AppendAction):
 def datePicker(thing, prefer_recording_date=False):
     '''This function returns a date of some sort, amongst all the possible
     dates (members called release_date, original_release_date,
-    and recording_date of type eyed3.core.Date).
+    and recording_date of type eyed3_79.core.Date).
 
     The order of preference is:
     1) date of original release

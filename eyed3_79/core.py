@@ -47,11 +47,11 @@ ALBUM_TYPE_IDS = [LP_TYPE, EP_TYPE, COMP_TYPE, LIVE_TYPE, VARIOUS_TYPE,
 
 VARIOUS_ARTISTS = u"Various Artists"
 
-TXXX_ALBUM_TYPE = u"eyeD3#album_type"
+TXXX_ALBUM_TYPE = u"eyed3_79#album_type"
 '''A key that can be used in a TXXX frame to specify the type of collection
-(or album) a file belongs. See :class:`eyed3.core.ALBUM_TYPE_IDS`.'''
+(or album) a file belongs. See :class:`eyed3_79.core.ALBUM_TYPE_IDS`.'''
 
-TXXX_ARTIST_ORIGIN = u"eyeD3#artist_origin"
+TXXX_ARTIST_ORIGIN = u"eyed3_79#artist_origin"
 '''A key that can be used in a TXXX frame to specify the origin of an
 artist/band. i.e. where they are from.
 The format is: city<tab>state<tab>country'''
@@ -59,13 +59,13 @@ The format is: city<tab>state<tab>country'''
 
 def load(path, tag_version=None):
     '''Loads the file identified by ``path`` and returns a concrete type of
-    :class:`eyed3.core.AudioFile`. If ``path`` is not a file an ``IOError`` is
+    :class:`eyed3_79.core.AudioFile`. If ``path`` is not a file an ``IOError`` is
     raised. ``None`` is returned when the file type (i.e. mime-type) is not
     recognized.
     The following AudioFile types are supported:
 
-      * :class:`eyed3.mp3.Mp3AudioFile` - For mp3 audio files.
-      * :class:`eyed3.id3.TagFile` - For raw ID3 data files.
+      * :class:`eyed3_79.mp3.Mp3AudioFile` - For mp3 audio files.
+      * :class:`eyed3_79.id3.TagFile` - For raw ID3 data files.
 
     If ``tag_version`` is not None (the default) only a specific version of
     metadata is loaded. This value must be a version constant specific to the
@@ -184,7 +184,7 @@ class AudioFile(object):
     def rename(self, name, fsencoding=LOCAL_FS_ENCODING,
                preserve_file_time=False):
         '''Rename the file to ``name``.
-        The encoding used for the file name is :attr:`eyed3.LOCAL_FS_ENCODING`
+        The encoding used for the file name is :attr:`eyed3_79.LOCAL_FS_ENCODING`
         unless overridden by ``fsencoding``. Note, if the target file already
         exists, or the full path contains non-existent directories the
         operation will fail with :class:`IOError`.
@@ -223,11 +223,11 @@ class AudioFile(object):
         self._path = normpath(realpath(abspath(t)))
     @property
     def info(self):
-        '''Returns a concrete implemenation of :class:`eyed3.core.AudioInfo`'''
+        '''Returns a concrete implemenation of :class:`eyed3_79.core.AudioInfo`'''
         return self._info
     @property
     def tag(self):
-        '''Returns a concrete implemenation of :class:`eyed3.core.Tag`'''
+        '''Returns a concrete implemenation of :class:`eyed3_79.core.Tag`'''
         return self._tag
     @tag.setter
     def tag(self, t):

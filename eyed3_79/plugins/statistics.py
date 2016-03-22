@@ -20,12 +20,12 @@ from __future__ import print_function
 import sys, os, operator
 from collections import Counter
 
-from eyed3 import id3, mp3
-from eyed3.core import AUDIO_MP3
-from eyed3.utils import guessMimetype
-from eyed3.utils.console import Fore, Style, printMsg
-from eyed3.plugins import LoaderPlugin
-from eyed3.id3.frames import ImageFrame
+from eyed3_79 import id3, mp3
+from eyed3_79.core import AUDIO_MP3
+from eyed3_79.utils import guessMimetype
+from eyed3_79.utils.console import Fore, Style, printMsg
+from eyed3_79.plugins import LoaderPlugin
+from eyed3_79.id3.frames import ImageFrame
 
 ID3_VERSIONS = [id3.ID3_V1_0, id3.ID3_V1_1,
                 id3.ID3_V2_2, id3.ID3_V2_3, id3.ID3_V2_4]

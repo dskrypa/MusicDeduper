@@ -21,12 +21,12 @@ import os
 import hashlib
 from pprint import pformat
 from StringIO import StringIO
-from eyed3.utils import art
-from eyed3.utils import guessMimetype
-from eyed3.utils import makeUniqueFileName
-from eyed3.plugins import LoaderPlugin
-from eyed3.utils.console import printMsg, printWarning
-from eyed3.id3.frames import ImageFrame
+from eyed3_79.utils import art
+from eyed3_79.utils import guessMimetype
+from eyed3_79.utils import makeUniqueFileName
+from eyed3_79.plugins import LoaderPlugin
+from eyed3_79.utils.console import printMsg, printWarning
+from eyed3_79.id3.frames import ImageFrame
 
 try:
     import PIL

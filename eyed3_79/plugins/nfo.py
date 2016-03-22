@@ -18,12 +18,12 @@
 ################################################################################
 from __future__ import print_function
 import time
-from eyed3 import LOCAL_ENCODING as ENCODING
-from eyed3.utils.console import printMsg, printError
-from eyed3.utils import formatSize, formatTime
-from eyed3.info import VERSION
-from eyed3.id3 import versionToString
-from eyed3.plugins import LoaderPlugin
+from eyed3_79 import LOCAL_ENCODING as ENCODING
+from eyed3_79.utils.console import printMsg, printError
+from eyed3_79.utils import formatSize, formatTime
+from eyed3_79.info import VERSION
+from eyed3_79.id3 import versionToString
+from eyed3_79.plugins import LoaderPlugin
 
 class NfoPlugin(LoaderPlugin):
     NAMES = ["nfo"]
@@ -134,9 +134,9 @@ class NfoPlugin(LoaderPlugin):
 
             printMsg("")
             printMsg("=" * 78)
-            printMsg(".NFO file created with eyeD3 %s on %s" %
+            printMsg(".NFO file created with eyed3_79 %s on %s" %
                      (VERSION, time.asctime()))
-            printMsg("For more information about eyeD3 go to %s" %
+            printMsg("For more information about eyed3_79 go to %s" %
                      "http://eyeD3.nicfit.net/")
             printMsg("=" * 78)
 

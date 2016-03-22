@@ -23,16 +23,16 @@ from pprint import pformat
 from argparse import Namespace
 from collections import defaultdict
 
-from eyed3.id3 import ID3_V2_4
-from eyed3.id3.tag import TagTemplate
-from eyed3.plugins import LoaderPlugin
-from eyed3.utils import art
-from eyed3.utils.prompt import prompt
-from eyed3.utils.console import printMsg, printError, Style, Fore, Back
-from eyed3 import LOCAL_ENCODING
-from eyed3 import core, id3, compat
+from eyed3_79.id3 import ID3_V2_4
+from eyed3_79.id3.tag import TagTemplate
+from eyed3_79.plugins import LoaderPlugin
+from eyed3_79.utils import art
+from eyed3_79.utils.prompt import prompt
+from eyed3_79.utils.console import printMsg, printError, Style, Fore, Back
+from eyed3_79 import LOCAL_ENCODING
+from eyed3_79 import core, id3, compat
 
-from eyed3.core import (ALBUM_TYPE_IDS, TXXX_ALBUM_TYPE,
+from eyed3_79.core import (ALBUM_TYPE_IDS, TXXX_ALBUM_TYPE,
                         LP_TYPE, EP_TYPE, COMP_TYPE, VARIOUS_TYPE, DEMO_TYPE,
                         LIVE_TYPE, SINGLE_TYPE, VARIOUS_ARTISTS)
 EP_MAX_HINT = 9
@@ -332,8 +332,8 @@ Album types:
         return valid_cover
 
     def start(self, args, config):
-        import eyed3.utils.prompt
-        eyed3.utils.prompt.DISABLE_PROMPT = "exit" if args.no_prompt else None
+        import eyed3_79.utils.prompt
+        eyed3_79.utils.prompt.DISABLE_PROMPT = "exit" if args.no_prompt else None
 
         super(FixupPlugin, self).start(args, config)
 
@@ -630,7 +630,7 @@ Album types:
 
 
 def _getTemplateKeys():
-    from eyed3.id3.tag import TagTemplate
+    from eyed3_79.id3.tag import TagTemplate
 
     keys = list(TagTemplate("")._makeMapping(None, False).keys())
     keys.sort()

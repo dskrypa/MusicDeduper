@@ -1,13 +1,15 @@
 
-
 '''
 Author: Douglas Skrypa
-Date: 2016.02.07
-Version: 1.4
+Date: 2016.03.19
+Version: 1.5
 '''
 
-from __future__ import division;
-#from django.utils import text as dtext;
+from __future__ import division, unicode_literals;
+import sys, os;
+PY2 = (sys.version_info.major == 2);
+if PY2:
+	str = unicode;
 import re;
 import eyed3_79 as eyed3;
 from common import *;
@@ -30,15 +32,15 @@ class SongTag():
 		
 		if isinstance(content, eyed3.core.Date):
 			self.val = str(content);
-		elif isinstance(content, unicode):
-			self.val = content;
+		#elif isinstance(content, unicode):
+		#	self.val = content;
 		else:
-			try:
-				self.val = unicode(content, "utf-8");
-			except Exception as e:
-				self.val= content;
+			#try:
+			#	self.val = unicode(content, "utf-8");
+			#except Exception as e:
+			#	self.val= content;
 				#raise e;
-			#self.val = str(content);
+			self.val = str(content);
 	#/init
 	def __getitem__(self, key):
 		if (key == "id"):
@@ -165,7 +167,7 @@ class Song():
 			gmatch = Song.gpat.match(content);
 			if gmatch:
 				gid = int(gmatch.group(1));			
-				if (gid > len(v1_genres)):
+				if (gid >= len(v1_genres)):
 					return;														#ID3v1 genres have a limited valid range of index values
 				else:
 					content = v1_genres[gid];
@@ -238,7 +240,6 @@ class Song():
 		else:
 			tag2 = self.tagsById[tid][0].val;
 		if safe:
-			#dcleaned = dtext.get_valid_filename(tag2).replace("_", " ");		#Cleanup using Django first
 			return cleanup(tag2);
 		else:
 			return tag2;
