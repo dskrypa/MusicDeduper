@@ -18,8 +18,8 @@
 ################################################################################
 from __future__ import print_function
 import math
-from eyed3 import id3
-from eyed3.plugins import Plugin
+from eyed3_79 import id3
+from eyed3_79.plugins import Plugin
 
 
 class GenreListPlugin(Plugin):
@@ -27,7 +27,7 @@ class GenreListPlugin(Plugin):
     DESCRIPTION = u"ID3 v1 defined a list of genres and mapped them to "\
                    "to numeric values so they can be stored as a single "\
                    "byte. It is *recommended* that these genres are used "\
-                   "although most newer software (including eyeD3) does not "\
+                   "although most newer software (including eyed3_79) does not "\
                    "care."
     NAMES = ["genres"]
 

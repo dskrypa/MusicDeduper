@@ -17,7 +17,7 @@
 #
 ################################################################################
 '''
-    This module is deprecated. Use eyed3.utils and eyed3.utils.console instead.
+    This module is deprecated. Use eyed3_79.utils and eyed3_79.utils.console instead.
 '''
 import warnings
 warnings.warn(__doc__, DeprecationWarning, stacklevel=2)
@@ -73,7 +73,7 @@ __ENABLE_COLOR_OUTPUT[sys.stdout] = True
 __ENABLE_COLOR_OUTPUT[sys.stderr] = True
 
 def getColor(color_code, fp=sys.stdout):
-    warnings.warn("Use eyed3.utils.console new color syntax",
+    warnings.warn("Use eyed3_79.utils.console new color syntax",
                   stacklevel=2)
     if __ENABLE_COLOR_OUTPUT[fp]:
         return color_code or b""
@@ -81,14 +81,14 @@ def getColor(color_code, fp=sys.stdout):
         return b""
 
 def enableColorOutput(fp, state=True):
-    warnings.warn("Use eyed3.utils.console", DeprecationWarning,
+    warnings.warn("Use eyed3_79.utils.console", DeprecationWarning,
                   stacklevel=2)
     global __ENABLE_COLOR_OUTPUT
     __ENABLE_COLOR_OUTPUT[fp] = bool(state)
 
 @utils.encodeUnicode()
 def printError(s):
-    warnings.warn("Use eyed3.utils.console.printError", DeprecationWarning,
+    warnings.warn("Use eyed3_79.utils.console.printError", DeprecationWarning,
                   stacklevel=2)
     fp = sys.stderr
     fp.write('%s%s%s\n' % (getColor(ERROR_COLOR, fp), s, getColor(RESET, fp)))
@@ -96,7 +96,7 @@ def printError(s):
 
 @utils.encodeUnicode()
 def printWarning(s):
-    warnings.warn("Use eyed3.utils.console.printWarning", DeprecationWarning,
+    warnings.warn("Use eyed3_79.utils.console.printWarning", DeprecationWarning,
                   stacklevel=2)
     fp = sys.stderr
     fp.write('%s%s%s\n' % (getColor(WARNING_COLOR, fp), s, getColor(RESET, fp)))
@@ -104,7 +104,7 @@ def printWarning(s):
 
 @utils.encodeUnicode()
 def printMsg(s):
-    warnings.warn("Use eyed3.utils.console.printMsg", DeprecationWarning,
+    warnings.warn("Use eyed3_79.utils.console.printMsg", DeprecationWarning,
                   stacklevel=2)
     fp = sys.stdout
     fp.write("%s\n" % s)
@@ -112,7 +112,7 @@ def printMsg(s):
 
 @utils.encodeUnicode()
 def printHeader(s):
-    warnings.warn("Use eyed3.utils.console.printHeader", DeprecationWarning,
+    warnings.warn("Use eyed3_79.utils.console.printHeader", DeprecationWarning,
                   stacklevel=2)
     fp = sys.stdout
     fp.write('%s%s%s\n' % (getColor(HEADER_COLOR, fp), s, getColor(RESET, fp)))
@@ -120,14 +120,14 @@ def printHeader(s):
 
 @utils.encodeUnicode()
 def boldText(s, fp=sys.stdout, c=None):
-    warnings.warn("Use eyed3.utils.console new color syntax",
+    warnings.warn("Use eyed3_79.utils.console new color syntax",
                   DeprecationWarning, stacklevel=2)
     return "%s%s%s%s" % (getColor(BOLD, fp), getColor(c, fp),
                          s, getColor(RESET, fp))
 
 @utils.encodeUnicode()
 def colorText(s, fp=sys.stdout, c=None):
-    warnings.warn("Use eyed3.utils.console new color syntax",
+    warnings.warn("Use eyed3_79.utils.console new color syntax",
                   stacklevel=2)
     return getColor(c, fp) + s + getColor(RESET)
 

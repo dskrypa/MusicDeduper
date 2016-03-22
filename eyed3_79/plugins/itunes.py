@@ -17,8 +17,8 @@
 #
 ################################################################################
 from __future__ import print_function
-from eyed3.plugins import LoaderPlugin
-from eyed3.id3.apple import PCST, WFED
+from eyed3_79.plugins import LoaderPlugin
+from eyed3_79.id3.apple import PCST, WFED
 
 class Podcast(LoaderPlugin):
     NAMES = ['itunes-podcast']

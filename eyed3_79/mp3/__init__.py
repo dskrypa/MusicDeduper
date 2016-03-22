@@ -65,7 +65,7 @@ class Mp3AudioInfo(core.AudioInfo):
         self.vbri_header = None
         self.lame_tag = None
         '''If not ``None``, the Lame header.
-        See :class:`eyed3.mp3.headers.LameHeader`'''
+        See :class:`eyed3_79.mp3.headers.LameHeader`'''
         self.bit_rate = (None, None)
         '''2-tuple, (vrb?:boolean, bitrate:int)'''
 

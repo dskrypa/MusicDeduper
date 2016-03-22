@@ -1,4 +1,9 @@
 
+'''
+Author: Douglas Skrypa
+Date: 2016.03.19
+'''
+
 v1_fields = ["title","artist","album","year","comment","track","genre"];
 
 tagTypes= {
@@ -116,7 +121,14 @@ tagTypes= {
 	"ITNU": "iTunesU? [invalid]",
 	"TCAT": "Podcast Category? [invalid]",
 	"MJCF": "MediaJukebox? [invalid]",
+	
+	#Newly discovered bad tags
+	"RGAD": "Unknown-BAD",
 };
+
+def tag_type(tagid):
+	return tagTypes[tagid] if (tagid in tagTypes) else "Unknown-BAD";
+#/tag_type
 
 v1_genres = [
 	"Blues",

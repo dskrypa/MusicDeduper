@@ -181,7 +181,7 @@ class Frame(object):
         assert(self.header)
         header = self.header
 
-        # eyeD3 never writes unsync'd frames
+        # eyed3_79 never writes unsync'd frames
         header.unsync = False
 
         format_data = b""
@@ -341,7 +341,7 @@ class UserTextFrame(TextFrame):
 
 
 class DateFrame(TextFrame):
-    ## \a date Either an ISO 8601 date string or a eyed3.core.Date object.
+    ## \a date Either an ISO 8601 date string or a eyed3_79.core.Date object.
     def __init__(self, id, date=""):
         assert(id in DATE_FIDS or id in DEPRECATED_DATE_FIDS)
         super(DateFrame, self).__init__(id, text=unicode(date))
@@ -363,7 +363,7 @@ class DateFrame(TextFrame):
         return core.Date.parse(self.text.encode("latin1")) if self.text \
                                                            else None
 
-    ## \a date Either an ISO 8601 date string or a eyed3.core.Date object.
+    ## \a date Either an ISO 8601 date string or a eyed3_79.core.Date object.
     @date.setter
     def date(self, date):
         if not date:
@@ -376,7 +376,7 @@ class DateFrame(TextFrame):
             elif type(date) is unicode:
                 date = core.Date.parse(date.encode("latin1"))
             elif not isinstance(date, core.Date):
-                raise TypeError("str, unicode, and eyed3.core.Date type "
+                raise TypeError("str, unicode, and eyed3_79.core.Date type "
                                 "expected")
         except ValueError:
             log.warning("Invalid date text: %s" % date)

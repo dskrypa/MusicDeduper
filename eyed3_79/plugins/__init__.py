@@ -23,9 +23,9 @@ try:
     from collections import OrderedDict
 except ImportError:
     from ordereddict import OrderedDict
-from eyed3 import core, utils
-from eyed3.utils import guessMimetype
-from eyed3.utils.console import printMsg, printError
+from eyed3_79 import core, utils
+from eyed3_79.utils import guessMimetype
+from eyed3_79.utils.console import printMsg, printError
 
 _PLUGINS = {}
 
@@ -34,7 +34,7 @@ log = getLogger(__name__)
 
 
 def load(name=None, reload=False, paths=None):
-    '''Returns the eyed3.plugins.Plugin *class* identified by ``name``.
+    '''Returns the eyed3_79.plugins.Plugin *class* identified by ``name``.
     If ``name`` is ``None`` then the full list of plugins is returned.
     Once a plugin is loaded its class object is cached, and future calls to
     this function will returned the cached version. Use ``reload=True`` to
@@ -87,7 +87,7 @@ def load(name=None, reload=False, paths=None):
 
                 for attr in [getattr(mod, a) for a in dir(mod)]:
                     if (type(attr) == type and issubclass(attr, Plugin)):
-                        # This is a eyed3.plugins.Plugin
+                        # This is a eyed3_79.plugins.Plugin
                         PluginClass = attr
                         if (PluginClass not in list(_PLUGINS.values()) and
                                 len(PluginClass.NAMES)):
@@ -118,9 +118,9 @@ def load(name=None, reload=False, paths=None):
 
 
 class Plugin(utils.FileHandler):
-    '''Base class for all eyeD3 plugins'''
+    '''Base class for all eyed3_79 plugins'''
 
-    SUMMARY = u"eyeD3 plugin"
+    SUMMARY = u"eyed3_79 plugin"
     '''One line about the plugin'''
 
     DESCRIPTION = u""
@@ -166,10 +166,10 @@ class LoaderPlugin(Plugin):
 
     def handleFile(self, f, *args, **kwargs):
         '''Loads ``f`` and sets ``self.audio_file`` to an instance of
-        :class:`eyed3.core.AudioFile` or ``None`` if an error occurred or the
+        :class:`eyed3_79.core.AudioFile` or ``None`` if an error occurred or the
         file is not a recognized type.
 
-        The ``*args`` and ``**kwargs`` are passed to :func:`eyed3.core.load`.
+        The ``*args`` and ``**kwargs`` are passed to :func:`eyed3_79.core.load`.
         '''
         self.audio_file = None
 
