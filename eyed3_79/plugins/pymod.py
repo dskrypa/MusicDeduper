@@ -20,8 +20,8 @@ from __future__ import print_function
 import sys
 import importlib
 
-from eyed3_79.plugins import LoaderPlugin
-from eyed3_79.compat import importmod
+from eyed3.plugins import LoaderPlugin
+from eyed3.compat import importmod
 
 
 _DEFAULT_MOD = "eyeD3mod.py"
@@ -37,8 +37,8 @@ exist they still be invoked:
 
 def audioFile(audio_file):
     '''Invoked for every audio file that is encountered. The ``audio_file``
-    is of type ``eyed3_79.core.AudioFile``; currently this is the concrete type
-    ``eyed3_79.mp3.Mp3AudioFile``.'''
+    is of type ``eyed3.core.AudioFile``; currently this is the concrete type
+    ``eyed3.mp3.Mp3AudioFile``.'''
     pass
 
 def audioDir(d, audio_files, images):

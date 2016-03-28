@@ -1,4 +1,4 @@
-#!/usr/bin/env python2-64
+#!/usr/bin/python
 
 '''
 Author: Douglas Skrypa

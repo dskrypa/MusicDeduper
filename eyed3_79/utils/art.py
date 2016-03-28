@@ -69,7 +69,7 @@ TO_ID3_ART_TYPES = {
 #    PUBLISHER_LOGO      = 0x14
 
 FROM_ID3_ART_TYPES = {}
-'''A mapping of ID3 art types to eyed3_79 art types; the opposite of
+'''A mapping of ID3 art types to eyeD3 art types; the opposite of
 TO_ID3_ART_TYPES.'''
 for _type in TO_ID3_ART_TYPES:
     for _id3_type in TO_ID3_ART_TYPES[_type]:
@@ -90,7 +90,7 @@ def matchArtFile(filename):
 
 
 def getArtFromTag(tag, type_=None):
-    '''Returns a list of eyed3_79.id3.frames.ImageFrame objects matching ``type_``,
+    '''Returns a list of eyed3.id3.frames.ImageFrame objects matching ``type_``,
     all if ``type_`` is None, or empty if tag does not contain art.'''
     art = []
     for img in tag.images:

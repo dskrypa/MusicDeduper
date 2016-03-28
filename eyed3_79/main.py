@@ -22,18 +22,18 @@ import sys
 import textwrap
 import warnings
 
-import eyed3_79
-import eyed3_79.utils
-import eyed3_79.utils.console
-import eyed3_79.plugins
-import eyed3_79.info
-from eyed3_79.compat import ConfigParser, ConfigParserError, StringIO
+import eyed3
+import eyed3.utils
+import eyed3.utils.console
+import eyed3.plugins
+import eyed3.info
+from eyed3.compat import ConfigParser, ConfigParserError, StringIO
 
-from eyed3_79.utils.log import initLogging
+from eyed3.utils.log import initLogging
 initLogging()
 
 DEFAULT_PLUGIN = "classic"
-DEFAULT_CONFIG = eyed3_79.info.USER_CONFIG
+DEFAULT_CONFIG = eyed3.info.USER_CONFIG
 
 
 def main(args, config):
@@ -45,7 +45,7 @@ def main(args, config):
 
     # Process paths (files/directories)
     for p in args.paths:
-        eyed3_79.utils.walk(args.plugin, p, excludes=args.excludes,
+        eyed3.utils.walk(args.plugin, p, excludes=args.excludes,
                          fs_encoding=args.fs_encoding)
 
     retval = args.plugin.handleDone()
@@ -54,7 +54,7 @@ def main(args, config):
 
 
 def _listPlugins(config):
-    from eyed3_79.utils.console import Fore, Style
+    from eyed3.utils.console import Fore, Style
 
     print("")
 
@@ -63,13 +63,13 @@ def _listPlugins(config):
         return (Style.BRIGHT + (Fore.GREEN if is_default else '') + "* " +
                 name + Style.RESET_ALL)
 
-    all_plugins = eyed3_79.plugins.load(reload=True, paths=_getPluginPath(config))
+    all_plugins = eyed3.plugins.load(reload=True, paths=_getPluginPath(config))
     # Create a new dict for sorted display
     plugin_names = []
     for plugin in set(all_plugins.values()):
         plugin_names.append(plugin.NAMES[0])
 
-    print("Type 'eyed3_79 --plugin=<name> --help' for more help")
+    print("Type 'eyeD3 --plugin=<name> --help' for more help")
     print("")
 
     plugin_names.sort()
@@ -106,7 +106,7 @@ def _loadConfig(args):
             config = ConfigParser()
             config.read(config_file)
         except ConfigParserError as ex:
-            eyed3_79.log.warning("User config error: " + str(ex))
+            eyed3.log.warning("User config error: " + str(ex))
             return None
     elif config_file != DEFAULT_CONFIG:
         raise IOError("User config not found: %s" % config_file)
@@ -115,7 +115,7 @@ def _loadConfig(args):
 
 
 def _getPluginPath(config):
-    plugin_path = [eyed3_79.info.USER_PLUGINS_DIR]
+    plugin_path = [eyed3.info.USER_PLUGINS_DIR]
 
     if config and config.has_option("default", "plugin_path"):
         val = config.get("default", "plugin_path")
@@ -131,7 +131,7 @@ def profileMain(args, config):  # pragma: no cover
     import cProfile
     import pstats
 
-    eyed3_79.log.debug("driver profileMain")
+    eyed3.log.debug("driver profileMain")
     prof = cProfile.Profile()
     prof = prof.runctx("main(args)", globals(), locals())
 
@@ -149,9 +149,9 @@ def profileMain(args, config):  # pragma: no cover
 
 
 def makeCmdLineParser(subparser=None):
-    from eyed3_79.utils import ArgumentParser
+    from eyed3.utils import ArgumentParser
 
-    p = (ArgumentParser(prog=eyed3_79.info.NAME, add_help=True)
+    p = (ArgumentParser(prog=eyed3.info.NAME, add_help=True)
             if not subparser else subparser)
 
     p.add_argument("paths", metavar="PATH", nargs="*",
@@ -179,13 +179,13 @@ def makeCmdLineParser(subparser=None):
     p.add_argument("-Q", "--quiet", action="store_true", dest="quiet",
                    default=False, help="A hint to plugins to output less.")
     p.add_argument("--fs-encoding", action="store",
-                   dest="fs_encoding", default=eyed3_79.LOCAL_FS_ENCODING,
+                   dest="fs_encoding", default=eyed3.LOCAL_FS_ENCODING,
                    metavar="ENCODING",
                    help="Use the specified file system encoding for "
                         "filenames.  Default as it was detected is '%s' "
                         "but this option is still useful when reading "
                         "from mounted file systems." %
-                        eyed3_79.LOCAL_FS_ENCODING)
+                        eyed3.LOCAL_FS_ENCODING)
     p.add_argument("--no-config", action="store_true", dest="no_config",
                    help="Do not load the default user config '%s'. "
                         "The -c/--config options are still honored if "
@@ -245,9 +245,9 @@ def parseCommandLine(cmd_line_args=None):
         plugin_name = DEFAULT_PLUGIN
     assert(plugin_name)
 
-    PluginClass = eyed3_79.plugins.load(plugin_name, paths=_getPluginPath(config))
+    PluginClass = eyed3.plugins.load(plugin_name, paths=_getPluginPath(config))
     if PluginClass is None:
-        eyed3_79.utils.console.printError("Plugin not found: %s" % plugin_name)
+        eyed3.utils.console.printError("Plugin not found: %s" % plugin_name)
         parser.exit(1)
     plugin = PluginClass(parser)
 
@@ -260,8 +260,8 @@ def parseCommandLine(cmd_line_args=None):
     args = parser.parse_args(args=cmd_line_args)
 
     args.plugin = plugin
-    eyed3_79.log.debug("command line args: %s", args)
-    eyed3_79.log.debug("plugin is: %s", plugin)
+    eyed3.log.debug("command line args: %s", args)
+    eyed3.log.debug("plugin is: %s", plugin)
 
     return args, parser, config
 
@@ -270,23 +270,23 @@ if __name__ == "__main__":  # pragma: no cover
     retval = 1
 
     # We should run against the same install
-    eyed3_79.require(eyed3_79.info.VERSION)
+    eyed3.require(eyed3.info.VERSION)
 
     try:
         args, _, config = parseCommandLine()
 
-        eyed3_79.utils.console.AnsiCodes.init(not args.no_color)
+        eyed3.utils.console.AnsiCodes.init(not args.no_color)
 
         mainFunc = main if args.debug_profile is False else profileMain
         retval = mainFunc(args, config)
     except KeyboardInterrupt:
         retval = 0
     except (StopIteration, IOError) as ex:
-        eyed3_79.utils.console.printError(unicode(ex))
+        eyed3.utils.console.printError(unicode(ex))
         retval = 1
     except Exception as ex:
-        eyed3_79.utils.console.printError("Uncaught exception: %s\n" % str(ex))
-        eyed3_79.log.exception(ex)
+        eyed3.utils.console.printError("Uncaught exception: %s\n" % str(ex))
+        eyed3.log.exception(ex)
 
         if args.debug_pdb:
             try:

@@ -18,8 +18,8 @@
 ################################################################################
 import os
 
-from eyed3_79.utils.console import printMsg, printError
-from eyed3_79.plugins import LoaderPlugin
+from eyed3.utils.console import printMsg, printError
+from eyed3.plugins import LoaderPlugin
 
 class Xep118Plugin(LoaderPlugin):
     NAMES = ["xep-118"]

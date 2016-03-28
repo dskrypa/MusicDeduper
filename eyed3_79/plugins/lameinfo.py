@@ -19,11 +19,11 @@
 from __future__ import print_function
 import os
 import math
-from eyed3_79 import LOCAL_ENCODING as ENCODING
-from eyed3_79.utils import formatSize, formatTime
-from eyed3_79.utils.console import (printMsg, printError, printWarning, boldText,
+from eyed3 import LOCAL_ENCODING as ENCODING
+from eyed3.utils import formatSize, formatTime
+from eyed3.utils.console import (printMsg, printError, printWarning, boldText,
                                  Fore, HEADER_COLOR)
-from eyed3_79.plugins import LoaderPlugin
+from eyed3.plugins import LoaderPlugin
 
 class LameInfoPlugin(LoaderPlugin):
     NAMES = ["lameinfo", "xing"]

@@ -1,9 +1,9 @@
-#!/usr/bin/env python3-64
+#!/usr/bin/python
 
 '''
 Author: Douglas Skrypa
-Date: 2016.03.19
-Version: 4.5
+Date: 2016.02.07
+Version: 4.4
 '''
 
 from __future__ import division, unicode_literals;
@@ -12,7 +12,6 @@ PY2 = (sys.version_info.major == 2);
 if PY2:
 	import codecs;
 	open = codecs.open;
-	str = unicode;
 #/if Python 2.x
 
 from argparse import ArgumentParser;
@@ -49,7 +48,8 @@ def main():
 		toRemove = {rtag[0:4].upper():sint(rtag[4:]) for rtag in remTags};		#Split the tags to remove into tag:version if they have one
 		print("[Tag  Version  Description] to be removed:");
 		for rtag in toRemove:
-			print("{:4}  {:7}  {}".format(rtag, str(toRemove[rtag]), tag_type(rtag)));
+			tagDesc = tagTypes[rtag] if rtag in tagTypes else "???";
+			print("{:4}  {:7}  {}".format(rtag, str(toRemove[rtag]), tagDesc));
 	
 	showFilter = False;
 	if (args.show != None):
@@ -58,7 +58,8 @@ def main():
 		toShow = {stag[0:4].upper():sint(stag[4:]) for stag in sTags};
 		print("[Tag  Version  Description] to be displayed:");
 		for stag in toShow:
-			print("{:4}  {:7}  {}".format(stag, str(toShow[stag]), tag_type(stag)));
+			tagDesc = tagTypes[stag] if stag in tagTypes else "???";
+			print("{:4}  {:7}  {}".format(stag, str(toShow[stag]), tagDesc));
 	
 	export = False;
 	if (args.export != None) and ((args.move != None) or (args.copy != None)):
@@ -98,7 +99,6 @@ def main():
 	for path in paths:
 		c += 1;
 		dt = pt.elapsed();
-		dt = 1 if (dt < 1) else dt;
 		rate = c/dt;
 		if ((dt - last_time) > 0.25):
 			last_time = dt;
@@ -126,11 +126,11 @@ def main():
 			clio.println(path + compStr);
 			lttdl = 0;
 			for tag in tags:
-				ttdl = len(tag_type(tag['id']));
+				ttdl = len(tagTypes[tag['id']]);
 				lttdl = ttdl if (ttdl > lttdl) else lttdl;
 			tfmt = "{0[ver]} {0[id]} {1:" + str(lttdl) + "} {0[val]}";
 			for tag in tags:
-				clio.printf(tfmt, tag, tag_type(tag["id"]));
+				clio.printf(tfmt, tag, tagTypes[tag["id"]]);
 		elif showFilter:
 			stags = [tag for tag in tags if (tag["id"] in toShow)];
 			if (len(stags) > 0):
@@ -138,13 +138,13 @@ def main():
 				clio.println(path + compStr);
 				lttdl = 0;
 				for tag in stags:
-					ttdl = len(tag_type(tag['id']));
+					ttdl = len(tagTypes[tag['id']]);
 					lttdl = ttdl if (ttdl > lttdl) else lttdl;
 				tfmt = "{0[ver]} {0[id]} {1:" + str(lttdl) + "} {0[val]}";
 				for tag in stags:
 					tid = tag["id"];
 					if ((tid in toShow) and ((toShow[tid] == None) or (int(tag["ver"]) == toShow[tid]))):
-						clio.printf(tfmt, tag, tag_type(tid));
+						clio.printf(tfmt, tag, tagTypes[tid]);
 		
 		if reorganize:
 			opath, npath = pmgr.addSong(song);
@@ -209,8 +209,8 @@ def getWidths(dict):
 	kw = 0;
 	vw = 0;
 	for key in dict:
-		klen = len(str(key));
-		vlen = len(str(dict[key]));
+		klen = len(unicode(key));
+		vlen = len(unicode(dict[key]));
 		kw = klen if (klen > kw) else kw;
 		vw = vlen if (vlen > vw) else vw;
 	return (kw, vw);
@@ -220,8 +220,7 @@ class PlacementManager():
 	def __init__(self, ddir):
 		self.analyzeOnly = (ddir == None);
 		if not self.analyzeOnly:
-			self.ddir = os.path.normpath(ddir);
-			#self.ddir = ddir[:-1] if (ddir[-1:] == "/") else ddir;
+			self.ddir = ddir[:-1] if (ddir[-1:] == "/") else ddir;
 		else:
 			self.ddir = "";
 		self.mdir = self.ddir + "/mismatches/";

@@ -71,7 +71,7 @@ class TagHeader(object):
     def parse(self, f):
         '''Parse an ID3 v2 header starting at the current position of ``f``.
         If a header is parsed ``True`` is returned, otherwise ``False``. If
-        a header is found but malformed an ``eyed3_79.id3.tag.TagException`` is
+        a header is found but malformed an ``eyed3.id3.tag.TagException`` is
         thrown.
         '''
         from .tag import TagException
@@ -130,7 +130,7 @@ class TagHeader(object):
             self.tag_size = tag_len
 
         if self.unsync:
-            raise NotImplementedError("eyed3_79 does not write (only reads) "
+            raise NotImplementedError("eyeD3 does not write (only reads) "
                                       "unsync'd data")
 
         data = b"ID3"
@@ -385,7 +385,7 @@ class ExtendedTagHeader(object):
         of ``fp`` and per the format defined by ``version``. This method
         should only be called when the presence of an extended header is known
         since it moves the file position. If a header is found but malformed
-        an ``eyed3_79.id3.tag.TagException`` is thrown. The return value is
+        an ``eyed3.id3.tag.TagException`` is thrown. The return value is
         ``None``.
         '''
         from .tag import TagException
@@ -603,7 +603,7 @@ class FrameHeader(object):
             data += bin2bytes(bin2synchsafe(dec2bin(data_size, 32)))
 
         if self.unsync:
-            raise NotImplementedError("eyed3_79 does not write (only reads) "
+            raise NotImplementedError("eyeD3 does not write (only reads) "
                                       "unsync'd data")
         data += bin2bytes(self._flags)
 

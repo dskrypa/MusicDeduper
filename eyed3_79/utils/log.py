@@ -21,7 +21,7 @@ import logging
 logging.basicConfig()
 
 DEFAULT_FORMAT = '%(name)s:%(levelname)s: %(message)s'
-MAIN_LOGGER = "eyed3_79"
+MAIN_LOGGER = "eyed3"
 
 # Add some levels
 logging.VERBOSE = logging.DEBUG + 1
@@ -50,7 +50,7 @@ def getLogger(name):
     finally:
         logging.setLoggerClass(og_class)
 
-## The main 'eyed3_79' logger
+## The main 'eyed3' logger
 log = getLogger(MAIN_LOGGER)
 
 
@@ -58,7 +58,7 @@ def initLogging():
     '''initialize the default logger with console output'''
     global log
 
-    # Don't propgate base 'eyed3_79'
+    # Don't propgate base 'eyed3'
     log.propagate = False
 
     console_handler = logging.StreamHandler()

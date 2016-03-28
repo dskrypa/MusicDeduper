@@ -20,13 +20,13 @@ from __future__ import print_function
 
 import os, stat, re
 from argparse import ArgumentTypeError
-from eyed3_79 import LOCAL_ENCODING
-from eyed3_79.plugins import LoaderPlugin
-from eyed3_79 import core, id3, mp3, utils, compat
-from eyed3_79.utils import makeUniqueFileName
-from eyed3_79.utils.console import (printMsg, printError, printWarning, boldText,
+from eyed3 import LOCAL_ENCODING
+from eyed3.plugins import LoaderPlugin
+from eyed3 import core, id3, mp3, utils, compat
+from eyed3.utils import makeUniqueFileName
+from eyed3.utils.console import (printMsg, printError, printWarning, boldText,
                                  HEADER_COLOR, Fore)
-from eyed3_79.id3.frames import ImageFrame
+from eyed3.id3.frames import ImageFrame
 
 from ..utils.log import getLogger
 log = getLogger(__name__)
@@ -36,7 +36,7 @@ FIELD_DELIM = ':'
 DEFAULT_MAX_PADDING = 64*1024
 
 class ClassicPlugin(LoaderPlugin):
-    SUMMARY = u"Classic eyed3_79 interface for viewing and editing tags."
+    SUMMARY = u"Classic eyeD3 interface for viewing and editing tags."
     DESCRIPTION = u"""
 All PATH arguments are parsed and displayed. Directory paths are searched
 recursively. Any editing options (--artist, --title) are applied to each file
@@ -486,7 +486,7 @@ optional. For example, 2012-03 is valid, 2012--12 is not.
 
         if self.args.rename_pattern:
             # Handle file renaming.
-            from eyed3_79.id3.tag import TagTemplate
+            from eyed3.id3.tag import TagTemplate
             template = TagTemplate(self.args.rename_pattern)
             name = template.substitute(self.audio_file.tag, zeropad=True)
             orig = self.audio_file.path
@@ -985,7 +985,7 @@ optional. For example, 2012-03 is valid, 2012--12 is not.
 
 
 def _getTemplateKeys():
-    from eyed3_79.id3.tag import TagTemplate
+    from eyed3.id3.tag import TagTemplate
     keys = list(id3.TagTemplate("")._makeMapping(None, False).keys())
     keys.sort()
     return ", ".join(["$%s" % v for v in keys])
@@ -1006,7 +1006,7 @@ ARGS_HELP = {
         "--disc-total": "Set total number of discs in set. Use 0 to clear.",
         "--genre": "Set the genre. If the argument is a standard ID3 genre "
                    "name or number both will be set. Otherwise, any string "
-                   "can be used. Run 'eyed3_79 --plugin=genres' for a list of "
+                   "can be used. Run 'eyeD3 --plugin=genres' for a list of "
                    "standard ID3 genre names/ids.",
 
         "--release-year": "Set the year the track was released. Use the date "

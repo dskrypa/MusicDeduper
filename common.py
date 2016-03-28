@@ -1,7 +1,7 @@
 '''
 Author: Douglas Skrypa
-Date: 2016.03.19
-Version: 1.7
+Date: 2016.02.07
+Version: 1.6
 '''
 
 from __future__ import division, unicode_literals;
@@ -11,13 +11,8 @@ if PY2:
 	import codecs;
 	open = codecs.open;
 	str = unicode;
-	import platform;
-	if (platform.system() == "Windows"):
-		import subprocess, shlex;
-		tcols = int(subprocess.check_output(shlex.split("tput cols")));
-	else:
-		trows, tcols = os.popen('stty size', 'r').read().split();
-		tcols = int(tcols);
+	trows, tcols = os.popen('stty size', 'r').read().split()
+	tcols = int(tcols);
 else:
 	import shutil;
 	tcols = shutil.get_terminal_size()[0];
@@ -27,20 +22,19 @@ import time, re;
 
 _badpath = re.compile(u'[\u0000-\u001F\u007F-\u009F/$!@#<>"\'|:*%?\\\\]', re.U);
 
+
 def getPaths(path):
 	'''
 	Recursively generates a list of absolute paths for every file discoverable
 	via the given path.
 	'''
-	path = str(os.path.normpath(path));											#Strip trailing slash if it exists
-	#path = path[:-1] if (path[-1:] == "/") else path;							#Strip trailing slash if it exists
-	#path = unicode(path);
+	path = path[:-1] if (path[-1:] == "/") else path;							#Strip trailing slash if it exists
+	path = unicode(path);
 	paths = [];																	#Initialize list to store paths in
 	if os.path.isdir(path):														#If the given path is a directory
 		for sub in os.listdir(path):											#Iterate through each sub-path in it
-			#sub = unicode(sub);
-			paths += getPaths(os.path.join(path, str(sub)));					#Add the list of paths discoverable there
-			#paths += getPaths(path + "/" + sub);								#Add the list of paths discoverable there
+			sub = unicode(sub);
+			paths += getPaths(path + "/" + sub);								#Add the list of paths discoverable there
 	elif os.path.isfile(path):													#Otherwise, if it is a file
 		paths += [path];														#Add the path to the list
 	return paths;																#Return the list
@@ -54,23 +48,22 @@ def getFilteredPaths(path, ext, sort=True):
 #/getFilteredPaths
 
 def getUnusedPath(rpath, fname, ext=None):
-	#rpath = rpath[:-1] if (rpath[-1:] == "/") else rpath;
-	rpath = os.path.normpath(rpath);
-	bname = fname;
+	rpath = rpath[:-1] if (rpath[-1:] == "/") else rpath;
+	basename = fname;
 	if (ext == None):
 		ppos = fname.rfind(".");
 		if (ppos != -1):
-			bname = fname[:ppos];
+			basename = fname[:ppos];
 			ext = fname[ppos+1:];
 		else:
 			ext = "UNKNOWN";
 	bnmax = 254 - len(ext);
-	fpath = rpath + "/" + bname[:bnmax] + "." + ext;
+	fpath = rpath + "/" + basename[:bnmax] + "." + ext;
 	c = 0;
 	while os.path.exists(fpath):
 		c += 1;
 		nbnmax = bnmax + len(str(c));
-		fpath = rpath + "/" + bname[:nbnmax] + str(c) + "." + ext;
+		fpath = rpath + "/" + basename[:nbnmax] + str(c) + "." + ext;
 	return fpath;
 #/getUnusedPath
 

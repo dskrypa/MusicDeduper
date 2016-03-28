@@ -38,7 +38,7 @@ if not LOCAL_FS_ENCODING:  # pragma: no cover
 
 
 class Error(Exception):
-    '''Base exception type for all eyed3_79 errors.'''
+    '''Base exception type for all eyed3 errors.'''
     def __init__(self, *args):
         super(Error, self).__init__(*args)
         if args:
@@ -49,9 +49,9 @@ class Error(Exception):
 
 
 def require(version_spec):
-    '''Check for a specific version of eyed3_79.
-    Returns ``None`` when the loaded version of ``eyed3_79`` is <= ``version_spec``
-    and raises a ``eyed3_79.Error`` otherwise. ``version_spec`` may be a string
+    '''Check for a specific version of eyeD3.
+    Returns ``None`` when the loaded version of ``eyed3`` is <= ``version_spec``
+    and raises a ``eyed3.Error`` otherwise. ``version_spec`` may be a string
     or int tuple. In either case at least **2** version values must be
     specified. For example, "0.7", (0,7,1), etc.
 
@@ -79,12 +79,12 @@ def require(version_spec):
     # than either of these the 'require' will fail.
     for i in 0, 1:
         if CURRENT_VERSION[i] > req_version[i]:
-            raise Error("eyed3_79 v%s not compatible with v%s (required)" %
+            raise Error("eyeD3 v%s not compatible with v%s (required)" %
                         (t2s(CURRENT_VERSION), t2s(req_version)))
 
     # Is the required version greater than us
     if req_version > CURRENT_VERSION:
-        raise Error("eyed3_79 v%s < v%s (required)" %
+        raise Error("eyed3 v%s < v%s (required)" %
                     (t2s(CURRENT_VERSION), t2s(req_version)))
 
 
