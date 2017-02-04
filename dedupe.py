@@ -7,18 +7,24 @@ Version: 8.1.1
 """
 
 from __future__ import division
+import os
 import sys
+import time
+import shutil
+import hashlib
+import logging
+import argparse
+import tempfile
+from enum import Enum   #For Python 2, need to run 'sudo pip install enum34'
+import eyeD3b as eyeD3  #A version of eyeD3 with a kludge added by me to make it support using a SpooledTemporaryFile
+
+from common import clio, getUnusedPath, ErrorLog, getFilteredPaths, PerfTimer, fTime
+
 PY2 = (sys.version_info.major == 2)
 if PY2:
     import codecs
     open = codecs.open
 #/Python 2 compatibility
-import os, shutil, time, hashlib
-from enum import Enum                                                            #For Python 2, need to run 'sudo pip install enum34'
-from argparse import ArgumentParser
-import tempfile
-import eyeD3b as eyeD3                                                            #A version of eyeD3 with a kludge added by me to make it support using a SpooledTemporaryFile
-from common import *
 
 
 def main():
@@ -35,11 +41,13 @@ def main():
     #tsave_dir = "/home/user/temp/test_"
     
     #Construct an ArgumentParser to handle command line arguments
-    parser = ArgumentParser(description="Music collection deduper")
+    parser = argparse.ArgumentParser(description="Music collection deduper")
+    parser.add_argument("scan_dir", help="The directory to scan for music")
+
     cmgroup = parser.add_argument_group("Compare Modes (required)")
     cmgroup.add_argument("-a", "--audio", help="Compare files based on a hash of the audio content (slower)", dest="comp_mode", action="store_const", const=Modes.audio)
     cmgroup.add_argument("-f", "--full", help="Compare files based on a hash of the entire file (faster)", dest="comp_mode", action="store_const", const=Modes.full)
-    parser.add_argument("--dir", "-d", help="The directory to scan for music", required=True)
+
     parser.add_argument("--list", "-l", help="List files that are duplicates instead of moving them", action="store_true", default=False)
     parser.add_argument("--xfile","-x", help="Path to hashes file")
     parser.add_argument("--export", "-e", metavar="path", help="File to which the duplicate list should be exported")
@@ -69,7 +77,7 @@ def main():
     #paths = getFilteredPaths(args.dir, "mp3")
     logPath = getUnusedPath("/home/user/temp/", "dedupe", "log")
     
-    deduperx = DeDuper(args.dir, None, logPath, args.xfile)
+    deduperx = DeDuper(args.scan_dir, None, logPath, args.xfile)
     hashes = deduperx.dedupe(args.comp_mode, args.skip).getHashes()            #Run the DeDuper
     
     clio.println()

@@ -8,21 +8,38 @@ Version: 1.6.1
 
 from __future__ import division, unicode_literals
 
-import sys, os
+import os
+import re
+import sys
+import time
+from subprocess import Popen, PIPE
+
 PY2 = (sys.version_info.major == 2)
 if PY2:
     import codecs
     open = codecs.open
     str = unicode
-    trows, tcols = os.popen('stty size', 'r').read().split()
-    tcols = int(tcols)
+    trows, tcols = map(int, Popen("stty size", stdout=PIPE).communicate()[0].split())
 else:
     import shutil
     tcols = shutil.get_terminal_size()[0]
 
-import time, re
-
 _badpath = re.compile(u'[\u0000-\u001F\u007F-\u009F/$!@#<>"\'|:*%?\\\\]', re.U)
+
+
+class InputValidationException(Exception):
+    pass
+
+
+def itemfinder(iterable, func):
+    """
+    :param iterable: A collection of items
+    :param func: Function that takes 1 argument and returns a bool
+    :return: The first item in iterable for which func(item) evaluates to True, or None if no such item exists
+    """
+    for i in iterable:
+        if func(i):
+            return i
 
 
 def getPaths(path):
