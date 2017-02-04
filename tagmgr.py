@@ -41,7 +41,7 @@ def main():
     
     print(args)
     removeMode = False
-    if (args.remove != None):
+    if (args.remove is not None):
         removeMode = True
         remTags = [item for sublist in args.remove for item in sublist]
         toRemove = {rtag[0:4].upper():sint(rtag[4:]) for rtag in remTags}        #Split the tags to remove into tag:version if they have one
@@ -51,7 +51,7 @@ def main():
             print("{:4}  {:7}  {}".format(rtag, str(toRemove[rtag]), tagDesc))
     
     showFilter = False
-    if (args.show != None):
+    if (args.show is not None):
         showFilter = True
         sTags = [item for sublist in args.show for item in sublist]
         toShow = {stag[0:4].upper():sint(stag[4:]) for stag in sTags}
@@ -61,7 +61,7 @@ def main():
             print("{:4}  {:7}  {}".format(stag, str(toShow[stag]), tagDesc))
     
     export = False
-    if (args.export != None) and ((args.move != None) or (args.copy != None)):
+    if (args.export is not None) and ((args.move is not None) or (args.copy is not None)):
         if os.path.isdir(args.export):
             parser.print_help()
             parser.exit(0, "Invalid export path must provide file name: " + args.export)
@@ -73,13 +73,13 @@ def main():
     
     reorganize = False
     copyMode = False
-    if (args.move != None) and (args.copy != None):
+    if (args.move is not None) and (args.copy is not None):
         parser.print_help()
         parser.exit(0, "Only one of move or copy can be used at a time")
-    elif (args.move != None):
+    elif (args.move is not None):
         pmgr = PlacementManager(args.move)
         reorganize = True
-    elif (args.copy != None):
+    elif (args.copy is not None):
         pmgr = PlacementManager(args.copy)
         reorganize = True
         copyMode = True
@@ -147,7 +147,7 @@ def main():
         
         if reorganize:
             opath, npath = pmgr.addSong(song)
-            if export and (npath != None):
+            if export and (npath is not None):
                 efile.write(efmt.format(opath, npath))
         elif args.analyzeDupes:
             pmgr.addSong(song)
@@ -161,7 +161,7 @@ def main():
             for opath in moves:
                 song = moves[opath]
                 better = song.isBetter()
-                if (better != None):
+                if (better is not None):
                     basedir = args.copy if copyMode else args.move
                     basedir = basedir[:-1] if (basedir[-1:] == "/") else basedir
                     npath = song.getNewPath()
@@ -175,14 +175,14 @@ def main():
         if args.noaction:            
             for orig in moves:
                 dest = moves[orig].getNewPath()
-                if (dest != None):
+                if (dest is not None):
                     clio.printf(rfmt, orig, dest)
         else:
             func = shutil.copy if copyMode else os.renames
             for orig in moves:
                 dest = moves[orig].getNewPath()
                 
-                if (dest != None):                
+                if (dest is not None):                
                     spos = dest.rfind("/")
                     if (spos != -1):
                         destDir = dest[:spos+1]
@@ -286,7 +286,7 @@ class PlacementManager():
             title = cleanup(song.getTagVal("TIT2", True))
             tnum = song.getTrack()
             fields = (artist, album, title)
-            xartist = albArtist if ((albArtist != None) and (len(albArtist) > 0)) else artist
+            xartist = albArtist if ((albArtist is not None) and (len(albArtist) > 0)) else artist
         except SongException as e:
             tagsMismatched = True
         
@@ -294,9 +294,9 @@ class PlacementManager():
             return self.getUnusedName(song, self.mdir, oldFname)
         elif (None in fields) or ("" in fields):
             npath = self.bdir
-            if (album != None):
+            if (album is not None):
                 npath = "{}albums/{}".format(self.bdir, album[:255])
-            elif (xartist != None):
+            elif (xartist is not None):
                 npath = "{}artists/{}".format(self.bdir, xartist[:255])
             return self.getUnusedName(song, npath, oldFname)
         else:

@@ -62,7 +62,7 @@ def main():
         parser.exit(0, "Error: Moving files is not currently supported.  Please use --list.")
     
     export = False
-    if (args.export != None):
+    if (args.export is not None):
         export = True
         efile = open(args.export, "w", encoding="utf-8")
     

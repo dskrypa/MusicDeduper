@@ -95,10 +95,10 @@ class Song():
     def trimTags(self):
         changed = {}
         changed1 = self._trimTags(eyed3.load(self.fpath, (1,None,None)))
-        if (changed1 != None):
+        if (changed1 is not None):
             changed.update(changed1)
         changed2 = self._trimTags(eyed3.load(self.fpath, (2,None,None)))
-        if (changed2 != None):
+        if (changed2 is not None):
             changed.update(changed2)
         return changed
     
@@ -133,7 +133,7 @@ class Song():
     
     def _addTagsFromAudioFile(self, af):
         if (af.tag == None): return
-        if (af.info != None):
+        if (af.info is not None):
             self.bitrate = af.info.mp3_header.bit_rate
         else:
             clio.println("No Audio info for: " + self.fpath)
@@ -168,7 +168,7 @@ class Song():
         for v in range(2, 0, -1):                                                #Check V2 then V1
             changed = False
             af = eyed3.load(self.fpath, (v,None,None))                            #Load the tags for the selected version
-            if (af.tag != None):                                                #If there are any tags
+            if (af.tag is not None):                                                #If there are any tags
                 for tagid in toRemove:                                            #Iterate through the tags to be removed
                     trv = toRemove[tagid]                                        #Get the version to be removed
                     if (trv == None) or (int(trv) == v):                        #If the version isn't set or matches the selected version
