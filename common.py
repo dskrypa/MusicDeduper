@@ -1,3 +1,5 @@
+#!/usr/bin/env python2
+
 '''
 Author: Douglas Skrypa
 Date: 2017.02.04
@@ -5,6 +7,7 @@ Version: 1.6.1
 '''
 
 from __future__ import division, unicode_literals
+
 import sys, os
 PY2 = (sys.version_info.major == 2)
 if PY2:
