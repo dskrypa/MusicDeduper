@@ -241,12 +241,7 @@ class DBTable:
         assert self.col_names[self.pk_pos] == self.pk
 
         if not table_exists:
-            col_strs = []
-            for i in range(len(self.col_names)):
-                if self.col_types[i]:
-                    col_strs.append("{} {}".format(self.col_names[i], self.col_types[i]))
-                else:
-                    col_strs.append(self.col_names[i])
+            col_strs = ["{} {}".format(cname, ctype) if ctype else cname for cname, ctype in self.columns.iteritems()]
             self.db.create_table(self.name, col_strs)
 
     def select(self, columns, where=None):
