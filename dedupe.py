@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.02.06
-Version: 8.1
+Date: 2017.02.04
+Version: 8.1.1
 '''
 
 from __future__ import division
@@ -53,10 +53,9 @@ def main():
     
     #Parse and process the given command line arguments
     args = parser.parse_args()
-    
-    
+
     if (args.comp_mode == None):                                                #If the compare mode was not provided
-        parser.print_help()                                                    #Print the help text
+        parser.print_help()                                                     #Print the help text
         parser.exit(0, "Compare mode is a required parameter!\n")                #Exit
     elif not args.list:
         parser.print_help()
@@ -87,21 +86,19 @@ def main():
     #    deduper1 = DeDuper(tsdir, tddir, tlpath, tsave_dir)                    #Then construct with test paths
     #else:                                                                        #Otherwise
     #    deduper1 = DeDuper(sdir, ddir, lpath, save_dir)                        #Construct with real paths
-    #/if
     #deduper1.dedupe(args.comp_mode, args.skip)                                    #Run the DeDuper
-#/main
 
 class Modes(Enum):
     audio = 1
     full = 2
-#/Modes
+
 
 class HashException(Exception):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
-#/HashException
 
 class DeDuper():
     '''
@@ -114,12 +111,10 @@ class DeDuper():
         self.errlog = ErrorLog(lpath)
         self.log = self.errlog.record
         self.save_dir = save_dir
-    #/init
     
     def dedupe(self, mode, skip=0):
         self.mode = mode
         return self.processDirectory(skip)
-    #/dedupe
     
     def getHash(self, fpath):
         '''
@@ -145,7 +140,6 @@ class DeDuper():
                 raise HashException("Unable to open file: " + fpath)
         else:
             raise HashException("Invalid mode!")
-    #/getHash
     
     def getExistingHashes(self):
         '''
@@ -202,7 +196,6 @@ class DeDuper():
             #    rate = c/dt
             #    remaining = fTime((t-c) / rate)
             #    clio.showf(spfmt, c/t, c, pt.elapsedf(), rate, remaining, rpath)    #Show current progress report
-            #/if
             
             try:
                 fhash = self.getHash(fpath)                                    #Get the hash for the current mode
@@ -211,12 +204,10 @@ class DeDuper():
                 self.log2("[ERROR] " + e.value)
             except Exception as ue:
                 self.log2("[ERROR] Unexpected {} on file: {}".format(type(ue).__name__, fpath))
-            #/try
-        #/for
+
         self.log2("Destination directory scan complete! Found {:d} files.".format(hashes.count()))
         clio.println("Destination directory scan runtime: " + pt.elapsedf())
         return hashes
-    #/getExistingHashes
     
     def processDirectory(self, skip):
         ifmt = "Determining file uniqueness via {} content hash..."            #Intro format string
@@ -229,7 +220,6 @@ class DeDuper():
             self.log2("Skipping the first {:,d} files without scanning them!".format(skip))
         else:
             skip = 0
-        #/if
         
         #fnames = os.listdir(self.sdir)                                            #Array of file names (relative path)
         paths = getFilteredPaths(self.sdir, "mp3")
@@ -254,7 +244,6 @@ class DeDuper():
             if (k < skip):                                                        #If the skip counter hasn't reached the file to skip to yet
                 k += 1                                                            #Increment the skip counter
                 continue                                                        #Skip to the next iteration of the for loop
-            #/if
             c += 1                                                                #Increment the counter
             dt = pt.elapsed()
             rate = c/dt
@@ -282,7 +271,6 @@ class DeDuper():
                 errors += 1
                 self.log2("[ERROR] Unexpected {} on file: {}".format(type(ue).__name__, fpath))
                 clio.println(ue.message)
-        #/for
         
         fmt = "{}   {:" + tl + "d} ({:.2%})"
         clio.println("Done!")
@@ -293,18 +281,15 @@ class DeDuper():
         clio.println("Runtime: " + pt.elapsedf())
         
         return hashes
-    #/processDirectory
     
     def dbg(self, msg):
         if self.debugMode:
             clio.println(msg)
-    #/dbg
     
     def log2(self, msg):
         clio.println(msg)
         self.log(msg)
-    #/log2
-#/DeDuper
+
 
 class HashList():
     '''
@@ -321,19 +306,15 @@ class HashList():
                 hfile = open(fpath, "r")                                            #Open it for reading
                 for line in hfile.read().splitlines():                                #Iterate through each line
                     self.hashes[line] = True                                        #Add the line to the dictionary
-                #/for
                 hfile.close()                                                        #Close the file
-            #/if
             self.file = open(fpath, "a")                                            #Open the file in append mode
             self.fpath = fpath                                                        #Store the file path
-    #/init
     
     def reset(self):
         if self.save:
             self.file.close()                                                    #Close the existing file
             self.file = open(self.fpath, "w")                                    #Re-open file in write mode, which overwrites the existing file
         self.hashes = {}                                                        #Reset the dictionary of hashes
-    #/reset
     
     #def add(self, fhash, fpath):
     #    if (fhash not in self.hashes):
@@ -353,23 +334,19 @@ class HashList():
                 self.file.flush()                                                #Make sure the line is written to disk
         self.hashes[fhash].append(fpath)
         return contained
-    #/contains
     
     def getHashes(self):
         return self.hashes                                                        #Return the full dictionary of hashes
-    #/getHashes
     
     def count(self):
         return len(self.hashes)                                                #Return the count of hashes in the dictionary
-    #/count
     
     def close(self):
         if self.save:
             self.file.close()                                                    #Close the save file
-    #/close
-#/HashList
+
 
 if __name__ == "__main__":
     #main(sys.argv)
     main()
-#/__main__
+

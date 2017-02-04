@@ -2,8 +2,8 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.02.07
-Version: 1.4
+Date: 2017.02.04
+Version: 1.4.1
 '''
 
 from __future__ import division
@@ -16,12 +16,13 @@ from _constants import *
 compIndicatorsA = {"soundtrack":True,"variousartists":True}
 compIndicatorsB = ["billboard","now thats what i call music","power trakks"]
 
+
 class SongException(Exception):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
-#/HashException
 
 class SongTag():
     def __init__(self, tid, version, content):
@@ -38,23 +39,20 @@ class SongTag():
             except Exception as e:
                 self.val= content
                 #raise e
-            #self.val = str(content)
-    #/init
+
     def __getitem__(self, key):
-        if (key == "id"):
+        if key == "id":
             return self.id
-        elif (key == "ver"):
+        elif key == "ver":
             return self.ver
-        elif (key == "val"):
+        elif key == "val":
             return self.val
-    #/getitem
+
     def __str__(self):
         return "[{}_{}]{}".format(self.id, self.ver, self.val)
-    #/str
+
     def __repr__(self):
         return "[{}_{}]{}".format(self.id, self.ver, self.val)
-    #/repr
-#/SongTag
 
 class Song():
     gpat = re.compile(r'\D*(\d+).*')
@@ -65,31 +63,24 @@ class Song():
         self.better = None
         self.bitrate = None
         self.updateTags()
-    #/init
     
     def setBetter(self, isBetter):
         self.better = isBetter
-    #/setBetter
     
     def isBetter(self):
         return self.better
-    #/isBetter
     
     def getNewPath(self):
         return self.newPath
-    #/getNewPath
     
     def setNewPath(self, newPath):
         self.newPath = newPath
-    #/setNewPath
     
     def getBitrate(self):
         return self.bitrate
-    #/getBitrate
     
     def isBad(self):
         return self._isBadFile
-    #/idBad
     
     def updateTags(self):
         self.tags = []
@@ -100,7 +91,6 @@ class Song():
             self._addTagsFromAudioFile(eyed3.load(self.fpath, (2,None,None)))
         except (ValueError, SongException) as e:
             self._isBadFile = True
-    #/updateTags
     
     def trimTags(self):
         changed = {}
@@ -111,7 +101,6 @@ class Song():
         if (changed2 != None):
             changed.update(changed2)
         return changed
-    #/trimTags
     
     def _trimTags(self, af):
         if (af.tag == None): return None
@@ -119,29 +108,28 @@ class Song():
         ver = af.tag.version
         tver = "[" + str(ver[0] + (ver[1]/10)) + "]"
         
-        s_artist = af.tag.artist.strip() if (af.tag.artist != None) else None
-        s_aartist = af.tag.album_artist.strip() if (af.tag.album_artist != None) else None
-        s_title = af.tag.title.strip() if (af.tag.title != None) else None
-        s_album = af.tag.album.strip() if (af.tag.album != None) else None
+        s_artist = af.tag.artist.strip() if (af.tag.artist is not None) else None
+        s_aartist = af.tag.album_artist.strip() if (af.tag.album_artist is not None) else None
+        s_title = af.tag.title.strip() if (af.tag.title is not None) else None
+        s_album = af.tag.album.strip() if (af.tag.album is not None) else None
         
         changed = {}
-        if (af.tag.artist != s_artist):
+        if af.tag.artist != s_artist:
             changed[tver + "Artist"] = "'{}' -> '{}'".format(af.tag.artist, s_artist)
             af.tag.artist = s_artist
-        if (af.tag.album_artist != s_aartist):
+        if af.tag.album_artist != s_aartist:
             changed[tver + "Album Artist"] = "'{}' -> '{}'".format(af.tag.album_artist, s_aartist)
             af.tag.album_artist = s_aartist
-        if (af.tag.title != s_title):
+        if af.tag.title != s_title:
             changed[tver + "Title"] = "'{}' -> '{}'".format(af.tag.title, s_title)
             af.tag.title = s_title
-        if (af.tag.album != s_album):
+        if af.tag.album != s_album:
             changed[tver + "Album"] = "'{}' -> '{}'".format(af.tag.album, s_album)
             af.tag.album = s_album
         
-        if (len(changed) > 0):
+        if len(changed) > 0:
             af.tag.save()
         return changed
-    #/_trimTags
     
     def _addTagsFromAudioFile(self, af):
         if (af.tag == None): return
@@ -157,7 +145,6 @@ class Song():
             frames = fs[tid]
             for frame in frames:
                 self._addTagInfo(tid, tver, frame)
-    #/_addTagsFromAudioFile
     
     def _addTagInfo(self, tid, tver, frame):
         content = getFrameContent(frame)
@@ -175,7 +162,6 @@ class Song():
             self.tagsById[tid] = []
         self.tagsById[tid].append(st)
         self.versions[tver] = True
-    #/_addTagInfo
     
     def remTags(self, toRemove):
         if self._isBadFile: return
@@ -196,13 +182,12 @@ class Song():
                     else:                                                        #Otherwise if it's version 1
                         af.tag.save(version=atv)                                #Save as its original version
         self.updateTags()
-    #/remV1Tags
     
     def getArtist(self):        return self.getTagVal("TPE1")
-    def getAlbumArtist(self):    return self.getTagVal("TPE2")
-    def getAlbum(self):            return self.getTagVal("TALB")
-    def getTitle(self):            return self.getTagVal("TIT2")
-    def getTrack(self):            return self.getTagVal("TRCK")
+    def getAlbumArtist(self):   return self.getTagVal("TPE2")
+    def getAlbum(self):         return self.getTagVal("TALB")
+    def getTitle(self):         return self.getTagVal("TIT2")
+    def getTrack(self):         return self.getTagVal("TRCK")
     
     def getTagVal(self, tid, safe=False):
         if (tid not in self.tagsById):
@@ -215,7 +200,7 @@ class Song():
                 else:
                     tag2 = tag.val
             if not tag2.startswith(tag1):
-                if (tid == "TRCK"):                                                #If it's the track number
+                if tid == "TRCK":                                                #If it's the track number
                     try:
                         t1 = normalizeTrack(tag1)
                         t2 = normalizeTrack(tag2)
@@ -242,11 +227,9 @@ class Song():
             return cleanup(tag2)
         else:
             return tag2
-    #/getTagVal
     
     def hasMultipleVersions(self):
         return (len(self.versions) > 1)
-    #/hasMultipleVersions
     
     def hasMultipleVersionsOf(self, tagid):
         if (not (len(self.versions) > 1)) or (tagid not in self.tagsById):
@@ -254,10 +237,9 @@ class Song():
         ver = 0
         for tag in self.tagsById[tagid]:
             ver = tag.ver if (ver == 0) else ver
-            if (ver != tag.ver):
+            if ver != tag.ver:
                 return True
         return False
-    #/hasMultipleVersionsOf
     
     def getVersions(self, tagid):
         if (tagid in self.tagsById):
@@ -266,15 +248,12 @@ class Song():
                 vers[tag.ver] = True
             return vers
         return None
-    #/getVersions
     
     def isPodcast(self):
-        return ("PCST" in self.tagsById)
-    #/isPodcast
+        return "PCST" in self.tagsById
     
     def isFromCompilation(self):
-        return ("TCMP" in self.tagsById)
-    #/isFromCompilation
+        return "TCMP" in self.tagsById
     
     def mayBeFromCompilation(self):
         albArtist = normalize(self.getTagVal("TPE2", True))
@@ -290,90 +269,75 @@ class Song():
             if ci in album:
                 return True
         return False
-    #/mayBeFromCompilation
     
     def hasTag(self, tagid):
         return (tagid in self.tagsById)
-    #/hasTag
     
     def getTagsById(self, tagid):
         return self.tagsById[tagid] if (tagid in self.tagsById) else None
-    #/getTagsById
     
     def getTags(self):
         return self.tags
-    #/getTags
-#/Song
+
 
 def normalize(strng):
-    if ((strng == None) or (len(strng) < 1)):
+    if (strng == None) or (len(strng) < 1):
         return strng
     return strng.lower().replace(" ","")
-#/normalize
+
 
 def normalizeAlbum(album):
     norm = album.lower().replace("(","[").replace(")","]")
     return re.sub(r'\[(cd|dis[ck])\s*(\d+)',r'[disk \2',norm) 
-#/normalizeAlbum
+
 
 def normalizeArtist(artist):
     norm = artist.lower()
     if norm.startswith("the"):
         return re.sub(r'the (.*)',r'\1, the',norm)
     return norm
-#/normalizeArtist
+
 
 def normalizeTrack(track):
     return int(track.split("/")[0]) if ("/" in track) else int(track)
-#/normalizeTrack
+
+
+frame_type_content_map = {
+    "ChapterFrame": "title",
+    "DateFrame": "date",
+    "UrlFrame": "url",
+    "UserUrlFrame": "url",
+    "MusicCDIdFrame": "toc",
+    "ObjectFrame": "filename",
+    "PopularityFrame": "rating",
+    "CommentFrame": "text",
+    "DescriptionLangTextFrame": "text",
+    "LyricsFrame": "text",
+    "TermsOfUseFrame": "text",
+    "TextFrame": "text",
+    "UserTextFrame": "text",
+}
+
 
 def getFrameContent(frame):
-    if isinstance(frame, eyed3.id3.frames.ChapterFrame):
-        content = frame.title
-    elif isinstance(frame, eyed3.id3.frames.CommentFrame):
-        content = frame.text
-    elif isinstance(frame, eyed3.id3.frames.DateFrame):
-        content = frame.date
-    elif isinstance(frame, eyed3.id3.frames.DescriptionLangTextFrame):
-        content = frame.text
-    elif isinstance(frame, eyed3.id3.frames.ImageFrame):
-        content = byteFmt(len(frame.image_data)) + " " + frame.mime_type
-    elif isinstance(frame, eyed3.id3.frames.LyricsFrame):
-        content = frame.text
-    elif isinstance(frame, eyed3.id3.frames.MusicCDIdFrame):
-        content = frame.toc
-    elif isinstance(frame, eyed3.id3.frames.ObjectFrame):
-        content = frame.filename
-    elif isinstance(frame, eyed3.id3.frames.PlayCountFrame):
-        content = frame.render()
-    elif isinstance(frame, eyed3.id3.frames.PopularityFrame):
-        content = frame.rating
+    if isinstance(frame, eyed3.id3.frames.ImageFrame):
+        return byteFmt(len(frame.image_data)) + " " + frame.mime_type
     elif isinstance(frame, eyed3.id3.frames.PrivateFrame):
-        #content = frame.render()
-        content = "???"
-    elif isinstance(frame, eyed3.id3.frames.TermsOfUseFrame):
-        content = frame.text
-    elif isinstance(frame, eyed3.id3.frames.TextFrame):
-        content = frame.text
-    elif isinstance(frame, eyed3.id3.frames.TocFrame):
-        content = frame.render()
-    elif isinstance(frame, eyed3.id3.frames.UniqueFileIDFrame):
-        content = frame.render()
-    elif isinstance(frame, eyed3.id3.frames.UrlFrame):
-        content = frame.url
-    elif isinstance(frame, eyed3.id3.frames.UserTextFrame):
-        content = frame.text
-    elif isinstance(frame, eyed3.id3.frames.UserUrlFrame):
-        content = frame.url
+        #return frame.render()
+        return "???"
     else:
-        content = "???"
-    return content
-#/getFrameContent
+        for ftype in ("PlayCountFrame", "TocFrame", "UniqueFileIDFrame"):
+            if isinstance(frame, getattr(eyed3.id3.frames, ftype)):
+                return frame.render()
+
+        for ftype, fattr in frame_type_content_map.items():
+            if isinstance(frame, getattr(eyed3.id3.frames, ftype)):
+                return getattr(frame, fattr)
+
+        return "???"
+
 
 def getPrintable(frame, tagTypes):
     hd = frame.header
     version = "v{}.{}".format(hd.majorVersion, hd.minorVersion)
-    fid = hd.id
-    content = getFrameContent(frame)
-    return "{} {} {:20s} {}".format(version, fid, tagTypes[fid], content)
-#/getPrintable
+    return "{} {} {:20s} {}".format(version, hd.id, tagTypes[hd.id], getFrameContent(frame))

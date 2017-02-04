@@ -1,5 +1,5 @@
 
-v1_fields = ["title","artist","album","year","comment","track","genre"];
+v1_fields = ["title","artist","album","year","comment","track","genre"]
 
 tagTypes= {
     #iTunes Verified Fields

@@ -2,7 +2,7 @@
 
 '''
 Author: Douglas Skrypa
-Date: 2016.02.07
+Date: 2017.02.04
 Version: 4.4
 '''
 
@@ -12,7 +12,6 @@ PY2 = (sys.version_info.major == 2)
 if PY2:
     import codecs
     open = codecs.open
-#/if Python 2.x
 
 from argparse import ArgumentParser
 import re
@@ -155,7 +154,6 @@ def main():
             
         if limit and (args.limit <= c):
             break
-    #/for processing files
     
     if reorganize:
         if args.undupe:
@@ -200,10 +198,9 @@ def main():
     
     if args.analyzeDupes:
         pmgr.analyzeSongs(True)
-    #/reorganize
     
     clio.println()
-#/main
+
 
 def getWidths(dict):
     kw = 0
@@ -214,7 +211,7 @@ def getWidths(dict):
         kw = klen if (klen > kw) else kw
         vw = vlen if (vlen > vw) else vw
     return (kw, vw)
-#/getWidths
+
 
 class PlacementManager():
     def __init__(self, ddir):
@@ -232,7 +229,6 @@ class PlacementManager():
         self.moves = {}                                                        #Store paths as new:old for easy destination conflict check
         self.movez = {}
         self.songs = {}
-    #/init
     
     def analyzeSongs(self, display=False):
         #self.songs[xartist][album][title]
@@ -263,11 +259,9 @@ class PlacementManager():
                             if display:
                                 print(fmt.format(s, best, br, artist, album, title, fpath))
         return self.moves
-    #/analyzeSongs
     
     def getMoves(self):
         return self.moves
-    #/getMoves
     
     def addSong(self, song):
         npath = self.getNewPath(song)
@@ -276,7 +270,6 @@ class PlacementManager():
         song.setNewPath(npath)
         self.moves[song.fpath] = song
         return (song.fpath, npath)
-    #/addSong
     
     def getNewPath(self, song):
         tags = song.getTags()
@@ -285,7 +278,6 @@ class PlacementManager():
         
         if song.isBad():
             return self.getUnusedName(song, self.fdir, oldFname)
-        #/bad file
         
         try:
             albArtist = cleanup(song.getTagVal("TPE2", True))
@@ -336,7 +328,6 @@ class PlacementManager():
             self.songs[xartist][album][title].append(song)
             
             return self.getUnusedName(song, npath, fname, "mp3")
-    #/getNewPath
 
     def getUnusedName(self, song, basedir, fname, ext=None):
         bpath = basedir[:-1] if (basedir[-1:] == "/") else basedir
@@ -365,8 +356,7 @@ class PlacementManager():
             nbnmax = bnmax + len(str(c))
             fpath = bpath + "/" + basename[:nbnmax] + str(c) + "." + ext
         return fpath
-    #/getUnusedName
-#/PlacementManager
+
 
 def sint(val):
     '''If val is castable to an integer, returns that integer, otherwise returns None'''
@@ -374,8 +364,6 @@ def sint(val):
         return int(val)
     except ValueError:
         return None
-#/sint
 
 if __name__ == "__main__":
     main()
-#/__main__
