@@ -62,7 +62,7 @@ def main():
         parser.exit(0, "Error: Moving files is not currently supported.  Please use --list.")
     
     export = False
-    if (args.export is not None):
+    if args.export is not None:
         export = True
         efile = open(args.export, "w", encoding="utf-8")
     
@@ -120,9 +120,9 @@ class DeDuper():
         '''
         Calculates and returns the hash for the given file based on the current mode
         '''
-        if (fpath[-3:].lower() != "mp3"):
+        if fpath[-3:].lower() != "mp3":
             raise HashException("Skipping non-mp3 file: " + fpath)
-        elif (self.mode == Modes.audio):
+        elif self.mode == Modes.audio:
             try:
                 tag = eyeD3.Tag()                                                #Initialize a new eyeD3 Tag
                 mfile = tempfile.SpooledTemporaryFile()                        #Initialize a temporary file in memory
@@ -133,7 +133,7 @@ class DeDuper():
                 return hashlib.sha256(mfile.read()).hexdigest()                #Return the hash of the audio content of the file
             except Exception as e:
                 raise HashException("Unable to decode file: " + fpath)
-        elif (self.mode == Modes.full):
+        elif self.mode == Modes.full:
             try:
                 return hashlib.sha256(open(fpath,"rb").read()).hexdigest()
             except (OSError, IOError):

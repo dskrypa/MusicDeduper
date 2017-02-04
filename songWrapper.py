@@ -190,12 +190,12 @@ class Song():
     def getTrack(self):         return self.getTagVal("TRCK")
     
     def getTagVal(self, tid, safe=False):
-        if (tid not in self.tagsById):
+        if tid not in self.tagsById:
             return None
         
         if self.hasMultipleVersionsOf(tid):
             for tag in self.tagsById[tid]:
-                if (tag.ver < 2):
+                if tag.ver < 2:
                     tag1 = tag.val
                 else:
                     tag2 = tag.val
@@ -242,7 +242,7 @@ class Song():
         return False
     
     def getVersions(self, tagid):
-        if (tagid in self.tagsById):
+        if tagid in self.tagsById:
             vers = {}
             for tag in self.tagsById[tagid]:
                 vers[tag.ver] = True
@@ -271,7 +271,7 @@ class Song():
         return False
     
     def hasTag(self, tagid):
-        return (tagid in self.tagsById)
+        return tagid in self.tagsById
     
     def getTagsById(self, tagid):
         return self.tagsById[tagid] if (tagid in self.tagsById) else None
