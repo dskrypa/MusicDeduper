@@ -49,9 +49,9 @@ def getFilteredPaths(path, ext, sort=True):
 def getUnusedPath(rpath, fname, ext=None):
     rpath = rpath[:-1] if (rpath[-1:] == "/") else rpath
     basename = fname
-    if (ext is None):
+    if ext is None:
         ppos = fname.rfind(".")
-        if (ppos != -1):
+        if ppos != -1:
             basename = fname[:ppos]
             ext = fname[ppos+1:]
         else:

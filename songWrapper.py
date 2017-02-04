@@ -95,15 +95,15 @@ class Song():
     def trimTags(self):
         changed = {}
         changed1 = self._trimTags(eyed3.load(self.fpath, (1,None,None)))
-        if (changed1 is not None):
+        if changed1 is not None:
             changed.update(changed1)
         changed2 = self._trimTags(eyed3.load(self.fpath, (2,None,None)))
-        if (changed2 is not None):
+        if changed2 is not None:
             changed.update(changed2)
         return changed
     
     def _trimTags(self, af):
-        if (af.tag is None): return None
+        if af.tag is None: return None
         fs = af.tag.frame_set
         ver = af.tag.version
         tver = "[" + str(ver[0] + (ver[1]/10)) + "]"
@@ -132,8 +132,8 @@ class Song():
         return changed
     
     def _addTagsFromAudioFile(self, af):
-        if (af.tag is None): return
-        if (af.info is not None):
+        if af.tag is None: return
+        if af.info is not None:
             self.bitrate = af.info.mp3_header.bit_rate
         else:
             clio.println("No Audio info for: " + self.fpath)
@@ -168,16 +168,16 @@ class Song():
         for v in range(2, 0, -1):                                                #Check V2 then V1
             changed = False
             af = eyed3.load(self.fpath, (v,None,None))                            #Load the tags for the selected version
-            if (af.tag is not None):                                                #If there are any tags
+            if af.tag is not None:                                                #If there are any tags
                 for tagid in toRemove:                                            #Iterate through the tags to be removed
                     trv = toRemove[tagid]                                        #Get the version to be removed
                     if (trv is None) or (int(trv) == v):                        #If the version isn't set or matches the selected version
-                        if (tagid in af.tag.frame_set):                            #If the tag id is present in the file
+                        if tagid in af.tag.frame_set:                            #If the tag id is present in the file
                             af.tag.frame_set.pop(tagid)                        #Remove it
                             changed = True                                        #Indicate that a change was made that should be saved
                 if changed:                                                        #If a change was made
                     atv = af.tag.version                                        #Check the version number of the tag
-                    if (atv[0] == 2):                                            #If it's version 2
+                    if atv[0] == 2:                                            #If it's version 2
                         af.tag.save(version=(2,4,0))                            #Save as version 2.4
                     else:                                                        #Otherwise if it's version 1
                         af.tag.save(version=atv)                                #Save as its original version
@@ -204,19 +204,19 @@ class Song():
                     try:
                         t1 = normalizeTrack(tag1)
                         t2 = normalizeTrack(tag2)
-                        if (t1 != t2):
+                        if t1 != t2:
                             raise SongException("Multiple versions of " + tid)
                     except ValueError as ve:
                         raise SongException("Multiple versions of " + tid)
                 elif (tid in ("TPE1", "TPE2")):                                    #If it's the artist / album artist
                     a1 = normalizeArtist(tag1)
                     a2 = normalizeArtist(tag2)
-                    if (a1 != a2):
+                    if a1 != a2:
                         raise SongException("Multiple versions of " + tid)
-                elif (tid == "TALB"):
+                elif tid == "TALB":
                     a1 = normalizeAlbum(tag1)
                     a2 = normalizeAlbum(tag2)
-                    if (a1 != a2):
+                    if a1 != a2:
                         raise SongException("Multiple versions of " + tid)
                 else:
                     raise SongException("Multiple versions of " + tid)

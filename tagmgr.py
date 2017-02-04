@@ -41,7 +41,7 @@ def main():
     
     print(args)
     removeMode = False
-    if (args.remove is not None):
+    if args.remove is not None:
         removeMode = True
         remTags = [item for sublist in args.remove for item in sublist]
         toRemove = {rtag[0:4].upper():sint(rtag[4:]) for rtag in remTags}        #Split the tags to remove into tag:version if they have one
@@ -51,7 +51,7 @@ def main():
             print("{:4}  {:7}  {}".format(rtag, str(toRemove[rtag]), tagDesc))
     
     showFilter = False
-    if (args.show is not None):
+    if args.show is not None:
         showFilter = True
         sTags = [item for sublist in args.show for item in sublist]
         toShow = {stag[0:4].upper():sint(stag[4:]) for stag in sTags}
@@ -76,10 +76,10 @@ def main():
     if (args.move is not None) and (args.copy is not None):
         parser.print_help()
         parser.exit(0, "Only one of move or copy can be used at a time")
-    elif (args.move is not None):
+    elif args.move is not None:
         pmgr = PlacementManager(args.move)
         reorganize = True
-    elif (args.copy is not None):
+    elif args.copy is not None:
         pmgr = PlacementManager(args.copy)
         reorganize = True
         copyMode = True
@@ -161,7 +161,7 @@ def main():
             for opath in moves:
                 song = moves[opath]
                 better = song.isBetter()
-                if (better is not None):
+                if better is not None:
                     basedir = args.copy if copyMode else args.move
                     basedir = basedir[:-1] if (basedir[-1:] == "/") else basedir
                     npath = song.getNewPath()
@@ -175,16 +175,16 @@ def main():
         if args.noaction:            
             for orig in moves:
                 dest = moves[orig].getNewPath()
-                if (dest is not None):
+                if dest is not None:
                     clio.printf(rfmt, orig, dest)
         else:
             func = shutil.copy if copyMode else os.renames
             for orig in moves:
                 dest = moves[orig].getNewPath()
                 
-                if (dest is not None):                
+                if dest is not None:                
                     spos = dest.rfind("/")
-                    if (spos != -1):
+                    if spos != -1:
                         destDir = dest[:spos+1]
                         if not os.path.isdir(destDir):
                             os.makedirs(destDir)
@@ -241,7 +241,7 @@ class PlacementManager():
             for album in self.songs[artist]:
                 for title in self.songs[artist][album]:
                     scount = len(self.songs[artist][album][title])
-                    if (scount > 1):
+                    if scount > 1:
                         #dupes.append(self.songs[artist][album][title])
                         dupez = []
                         bitrates = []
@@ -294,13 +294,13 @@ class PlacementManager():
             return self.getUnusedName(song, self.mdir, oldFname)
         elif (None in fields) or ("" in fields):
             npath = self.bdir
-            if (album is not None):
+            if album is not None:
                 npath = "{}albums/{}".format(self.bdir, album[:255])
-            elif (xartist is not None):
+            elif xartist is not None:
                 npath = "{}artists/{}".format(self.bdir, xartist[:255])
             return self.getUnusedName(song, npath, oldFname)
         else:
-            if (tnum is None):
+            if tnum is None:
                 tn = "XX"
             else:
                 try:
@@ -319,11 +319,11 @@ class PlacementManager():
             else:
                 npath = "{}{}/{}".format(ndir, xartist[:255], album[:255])
             
-            if (xartist not in self.songs):
+            if xartist not in self.songs:
                 self.songs[xartist] = {}
-            if (album not in self.songs[xartist]):
+            if album not in self.songs[xartist]:
                 self.songs[xartist][album] = {}
-            if (title not in self.songs[xartist][album]):
+            if title not in self.songs[xartist][album]:
                 self.songs[xartist][album][title] = []
             self.songs[xartist][album][title].append(song)
             
@@ -332,9 +332,9 @@ class PlacementManager():
     def getUnusedName(self, song, basedir, fname, ext=None):
         bpath = basedir[:-1] if (basedir[-1:] == "/") else basedir
         basename = fname
-        if (ext is None):
+        if ext is None:
             ppos = fname.rfind(".")
-            if (ppos != -1):
+            if ppos != -1:
                 basename = fname[:ppos]
                 ext = fname[ppos+1:]
             else:
@@ -345,12 +345,12 @@ class PlacementManager():
         shash = None                                                            #Song Hash, if necessary for preventing duplicates
         while ((fpath in self.movez) or (os.path.exists(fpath))):
             if os.path.exists(fpath):
-                if (fpath == song.fpath):                                        #If this is the same file, then it shouldn't be moved
+                if fpath == song.fpath:                                        #If this is the same file, then it shouldn't be moved
                     return None
-                if (shash is None):
+                if shash is None:
                     shash = hashlib.sha512(open(song.fpath,"rb").read()).hexdigest()
                 fhash = hashlib.sha512(open(fpath,"rb").read()).hexdigest()
-                if (shash == fhash):
+                if shash == fhash:
                     return None
             c += 1
             nbnmax = bnmax + len(str(c))

@@ -54,7 +54,7 @@ def main():
     #Parse and process the given command line arguments
     args = parser.parse_args()
 
-    if (args.comp_mode is None):                                                #If the compare mode was not provided
+    if args.comp_mode is None:                                                #If the compare mode was not provided
         parser.print_help()                                                     #Print the help text
         parser.exit(0, "Compare mode is a required parameter!\n")                #Exit
     elif not args.list:
@@ -148,7 +148,7 @@ class DeDuper():
         self.log2("Scanning for saved hashes...")
         hashes = HashList(self.mode, self.save_dir)                            #Initialize a new HashList with the mode and save location
         
-        if (self.ddir is None):
+        if self.ddir is None:
             return hashes
         
         paths = getFilteredPaths(self.ddir, "mp3")
@@ -216,7 +216,7 @@ class DeDuper():
         hashes = self.getExistingHashes()                                        #Get the Dictionary of hashes found
         
         self.log2("Processing source directory and copying unique files...")
-        if (skip > 0):
+        if skip > 0:
             self.log2("Skipping the first {:,d} files without scanning them!".format(skip))
         else:
             skip = 0
@@ -241,7 +241,7 @@ class DeDuper():
         
         #for fname in fnames:                                                    #Iterate through each file name
         for fpath in paths:
-            if (k < skip):                                                        #If the skip counter hasn't reached the file to skip to yet
+            if k < skip:                                                        #If the skip counter hasn't reached the file to skip to yet
                 k += 1                                                            #Increment the skip counter
                 continue                                                        #Skip to the next iteration of the for loop
             c += 1                                                                #Increment the counter
@@ -297,7 +297,7 @@ class HashList():
     '''
     def __init__(self, mode, save_dir=None):
         self.hashes = {}                                                        #Initialize the dictionary for storing hashes
-        if (save_dir is None):
+        if save_dir is None:
             self.save = False
         else:
             self.save = True        
@@ -317,7 +317,7 @@ class HashList():
         self.hashes = {}                                                        #Reset the dictionary of hashes
     
     #def add(self, fhash, fpath):
-    #    if (fhash not in self.hashes):
+    #    if fhash not in self.hashes:
     #        self.hashes[fhash] = []
     #        if self.save:
     #            self.file.write(fhash + "\n")                                    #Append it to the save file
