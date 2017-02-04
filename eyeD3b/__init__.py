@@ -17,29 +17,29 @@
 #
 ################################################################################
 
-eyeD3Version = "0.6.18";
-eyeD3Maintainer = "Travis Shirk <travis@pobox.com>";
+eyeD3Version = "0.6.18"
+eyeD3Maintainer = "Travis Shirk <travis@pobox.com>"
 
 # Version constants
-ID3_CURRENT_VERSION = 0x00; # The version of the linked tag, if any.
-ID3_V1              = 0x10;
-ID3_V1_0            = 0x11;
-ID3_V1_1            = 0x12;
-ID3_V2              = 0x20;
-ID3_V2_2            = 0x21;
-ID3_V2_3            = 0x22;
-ID3_V2_4            = 0x24;
-#ID3_V2_5            = 0x28; # This does not seem imminent.
-ID3_DEFAULT_VERSION = ID3_V2_4;
-ID3_ANY_VERSION     = ID3_V1 | ID3_V2;
+ID3_CURRENT_VERSION = 0x00 # The version of the linked tag, if any.
+ID3_V1              = 0x10
+ID3_V1_0            = 0x11
+ID3_V1_1            = 0x12
+ID3_V2              = 0x20
+ID3_V2_2            = 0x21
+ID3_V2_3            = 0x22
+ID3_V2_4            = 0x24
+#ID3_V2_5            = 0x28 # This does not seem imminent.
+ID3_DEFAULT_VERSION = ID3_V2_4
+ID3_ANY_VERSION     = ID3_V1 | ID3_V2
 
-import locale;
-LOCAL_ENCODING = locale.getpreferredencoding(do_setlocale=True);
+import locale
+LOCAL_ENCODING = locale.getpreferredencoding(do_setlocale=True)
 if not LOCAL_ENCODING or LOCAL_ENCODING == "ANSI_X3.4-1968":
-    LOCAL_ENCODING = 'latin1';
+    LOCAL_ENCODING = 'latin1'
 
-import eyeD3b.frames;
-import eyeD3b.mp3;
-import eyeD3b.tag;
-from eyeD3b.tag import *;
-import eyeD3b.utils;
+import eyeD3b.frames
+import eyeD3b.mp3
+import eyeD3b.tag
+from eyeD3b.tag import *
+import eyeD3b.utils

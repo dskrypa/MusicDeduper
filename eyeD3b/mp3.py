@@ -16,8 +16,8 @@
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 ################################################################################
-from binfuncs import *;
-from utils import *;
+from binfuncs import *
+from utils import *
 from math import log10
 
 #######################################################################
@@ -29,7 +29,7 @@ class Mp3Exception(Exception):
 SAMPLE_FREQ_TABLE = ((44100, 22050, 11025),
                      (48000, 24000, 12000),
                      (32000, 16000, 8000),
-                     (None,  None,  None));
+                     (None,  None,  None))
 
 #              V1/L1  V1/L2 V1/L3 V2/L1 V2/L2&L3 
 BIT_RATE_TABLE = ((0,    0,    0,    0,    0),
@@ -47,21 +47,21 @@ BIT_RATE_TABLE = ((0,    0,    0,    0,    0),
                   (384,  256,  224,  192,  128),
                   (416,  320,  256,  224,  144),
                   (448,  384,  320,  256,  160),
-                  (None, None, None, None, None));
+                  (None, None, None, None, None))
 
 #                             L1    L2    L3
-TIME_PER_FRAME_TABLE = (None, 384, 1152, 1152);
+TIME_PER_FRAME_TABLE = (None, 384, 1152, 1152)
 
 # Emphasis constants
-EMPHASIS_NONE = "None";
-EMPHASIS_5015 = "50/15 ms";
-EMPHASIS_CCIT = "CCIT J.17";
+EMPHASIS_NONE = "None"
+EMPHASIS_5015 = "50/15 ms"
+EMPHASIS_CCIT = "CCIT J.17"
 
 # Mode constants
-MODE_STEREO              = "Stereo";
-MODE_JOINT_STEREO        = "Joint stereo";
-MODE_DUAL_CHANNEL_STEREO = "Dual channel stereo";
-MODE_MONO                = "Mono";
+MODE_STEREO              = "Stereo"
+MODE_JOINT_STEREO        = "Joint stereo"
+MODE_DUAL_CHANNEL_STEREO = "Dual channel stereo"
+MODE_MONO                = "Mono"
 
 # Xing flag bits
 FRAMES_FLAG    = 0x0001
@@ -159,130 +159,130 @@ class Header:
    # This may throw an Mp3Exception if the header is malformed.
    def decode(self, header):
       if not is_valid_mp_header(header):
-         raise Mp3Exception("Invalid MPEG header");
+         raise Mp3Exception("Invalid MPEG header")
 
       # MPEG audio version from bits 19 and 20.
       version = (header >> 19) & 0x3
       self.version = [2.5, None, 2.0, 1.0][version]
       if self.version is None:
-         raise Mp3Exception("Illegal MPEG version");
+         raise Mp3Exception("Illegal MPEG version")
 
       # MPEG layer
       self.layer = 4 - ((header >> 17) & 0x3)
       if self.layer == 4:
-         raise Mp3Exception("Illegal MPEG layer");
+         raise Mp3Exception("Illegal MPEG layer")
 
       # Decode some simple values.
-      self.errorProtection = not (header >> 16) & 0x1;
-      self.padding = (header >> 9) & 0x1;
-      self.privateBit = (header >> 8) & 0x1;
-      self.copyright = (header >> 3) & 0x1;
-      self.original = (header >> 2) & 0x1;
+      self.errorProtection = not (header >> 16) & 0x1
+      self.padding = (header >> 9) & 0x1
+      self.privateBit = (header >> 8) & 0x1
+      self.copyright = (header >> 3) & 0x1
+      self.original = (header >> 2) & 0x1
 
       # Obtain sampling frequency.
-      sampleBits = (header >> 10) & 0x3;
+      sampleBits = (header >> 10) & 0x3
       if self.version == 2.5:
-         freqCol = 2;
+         freqCol = 2
       else:
-         freqCol = int(self.version - 1);
-      self.sampleFreq = SAMPLE_FREQ_TABLE[sampleBits][freqCol];
+         freqCol = int(self.version - 1)
+      self.sampleFreq = SAMPLE_FREQ_TABLE[sampleBits][freqCol]
       if not self.sampleFreq:
-         raise Mp3Exception("Illegal MPEG sampling frequency");
+         raise Mp3Exception("Illegal MPEG sampling frequency")
 
       # Compute bitrate.
-      bitRateIndex = (header >> 12) & 0xf;
+      bitRateIndex = (header >> 12) & 0xf
       if int(self.version) == 1 and self.layer == 1:
-         bitRateCol = 0;
+         bitRateCol = 0
       elif int(self.version) == 1 and self.layer == 2:
-         bitRateCol = 1;
+         bitRateCol = 1
       elif int(self.version) == 1 and self.layer == 3:
-         bitRateCol = 2;
+         bitRateCol = 2
       elif int(self.version) == 2 and self.layer == 1:
-         bitRateCol = 3;
+         bitRateCol = 3
       elif int(self.version) == 2 and (self.layer == 2 or \
                                        self.layer == 3):
-         bitRateCol = 4;
+         bitRateCol = 4
       else:
          raise Mp3Exception("Mp3 version %f and layer %d is an invalid "\
-                            "combination" % (self.version, self.layer));
-      self.bitRate = BIT_RATE_TABLE[bitRateIndex][bitRateCol];
+                            "combination" % (self.version, self.layer))
+      self.bitRate = BIT_RATE_TABLE[bitRateIndex][bitRateCol]
       if self.bitRate == None:
-         raise Mp3Exception("Invalid bit rate");
+         raise Mp3Exception("Invalid bit rate")
       # We know know the bit rate specified in this frame, but if the file
       # is VBR we need to obtain the average from the Xing header.
       # This is done by the caller since right now all we have is the frame
       # header.
 
-      # Emphasis; whatever that means??
-      emph = header & 0x3;
+      # Emphasis whatever that means??
+      emph = header & 0x3
       if emph == 0:
-         self.emphasis = EMPHASIS_NONE;
+         self.emphasis = EMPHASIS_NONE
       elif emph == 1:
-         self.emphasis = EMPHASIS_5015;
+         self.emphasis = EMPHASIS_5015
       elif emph == 2:
-         self.emphasis = EMPHASIS_CCIT;
+         self.emphasis = EMPHASIS_CCIT
       elif strictID3():
-         raise Mp3Exception("Illegal mp3 emphasis value: %d" % emph);
+         raise Mp3Exception("Illegal mp3 emphasis value: %d" % emph)
 
       # Channel mode.
-      modeBits = (header >> 6) & 0x3;
+      modeBits = (header >> 6) & 0x3
       if modeBits == 0:
-         self.mode = MODE_STEREO;
+         self.mode = MODE_STEREO
       elif modeBits == 1:
-         self.mode = MODE_JOINT_STEREO;
+         self.mode = MODE_JOINT_STEREO
       elif modeBits == 2:
-         self.mode = MODE_DUAL_CHANNEL_STEREO;
+         self.mode = MODE_DUAL_CHANNEL_STEREO
       else:
-         self.mode = MODE_MONO;
-      self.modeExtension = (header >> 4) & 0x3;
+         self.mode = MODE_MONO
+      self.modeExtension = (header >> 4) & 0x3
 
       # Layer II has restrictions wrt to mode and bit rate.  This code
       # enforces them.
       if self.layer == 2:
-         m = self.mode;
-         br = self.bitRate;
+         m = self.mode
+         br = self.bitRate
          if (br == 32 or br == 48 or br == 56 or br == 80) and \
             (m != MODE_MONO):
             raise Mp3Exception("Invalid mode/bitrate combination for layer "\
-                               "II");
+                               "II")
          if (br == 224 or br == 256 or br == 320 or br == 384) and \
             (m == MODE_MONO):
             raise Mp3Exception("Invalid mode/bitrate combination for layer "\
-                               "II");
+                               "II")
 
-      br = self.bitRate * 1000;
-      sf = self.sampleFreq;
-      p  = self.padding;
+      br = self.bitRate * 1000
+      sf = self.sampleFreq
+      p  = self.padding
       if self.layer == 1:
          # Layer 1 uses 32 bit slots for padding.
-         p  = self.padding * 4;
-         self.frameLength = int((((12 * br) / sf) + p) * 4);
+         p  = self.padding * 4
+         self.frameLength = int((((12 * br) / sf) + p) * 4)
       else:
          # Layer 2 and 3 uses 8 bit slots for padding.
-         p  = self.padding * 1;
-         self.frameLength = int(((144 * br) / sf) + p);
+         p  = self.padding * 1
+         self.frameLength = int(((144 * br) / sf) + p)
 
       # Dump the state.
-      TRACE_MSG("MPEG audio version: " + str(self.version));
-      TRACE_MSG("MPEG audio layer: " + ("I" * self.layer));
-      TRACE_MSG("MPEG sampling frequency: " + str(self.sampleFreq));
-      TRACE_MSG("MPEG bit rate: " + str(self.bitRate));
-      TRACE_MSG("MPEG channel mode: " + self.mode);
-      TRACE_MSG("MPEG channel mode extension: " + str(self.modeExtension));
-      TRACE_MSG("MPEG CRC error protection: " + str(self.errorProtection));
-      TRACE_MSG("MPEG original: " + str(self.original));
-      TRACE_MSG("MPEG copyright: " + str(self.copyright));
-      TRACE_MSG("MPEG private bit: " + str(self.privateBit));
-      TRACE_MSG("MPEG padding: " + str(self.padding));
-      TRACE_MSG("MPEG emphasis: " + str(self.emphasis));
-      TRACE_MSG("MPEG frame length: " + str(self.frameLength));
+      TRACE_MSG("MPEG audio version: " + str(self.version))
+      TRACE_MSG("MPEG audio layer: " + ("I" * self.layer))
+      TRACE_MSG("MPEG sampling frequency: " + str(self.sampleFreq))
+      TRACE_MSG("MPEG bit rate: " + str(self.bitRate))
+      TRACE_MSG("MPEG channel mode: " + self.mode)
+      TRACE_MSG("MPEG channel mode extension: " + str(self.modeExtension))
+      TRACE_MSG("MPEG CRC error protection: " + str(self.errorProtection))
+      TRACE_MSG("MPEG original: " + str(self.original))
+      TRACE_MSG("MPEG copyright: " + str(self.copyright))
+      TRACE_MSG("MPEG private bit: " + str(self.privateBit))
+      TRACE_MSG("MPEG padding: " + str(self.padding))
+      TRACE_MSG("MPEG emphasis: " + str(self.emphasis))
+      TRACE_MSG("MPEG frame length: " + str(self.frameLength))
 
 #######################################################################
 class XingHeader:
-   numFrames = int();
-   numBytes = int();
-   toc = [0] * 100;
-   vbrScale = int();
+   numFrames = int()
+   numBytes = int()
+   toc = [0] * 100
+   vbrScale = int()
 
    # Pass in the first mp3 frame from the file as a byte string.
    # If an Xing header is present in the file it'll be in the first mp3
@@ -290,61 +290,61 @@ class XingHeader:
    # frame, and false otherwise.
    def decode(self, frame):
       # mp3 version
-      version = (ord(frame[1]) >> 3) & 0x1;
+      version = (ord(frame[1]) >> 3) & 0x1
       # channel mode.
-      mode = (ord(frame[3]) >> 6) & 0x3;
+      mode = (ord(frame[3]) >> 6) & 0x3
 
       # Find the start of the Xing header.
       if version:
          if mode != 3:
-            pos = 32 + 4;
+            pos = 32 + 4
          else:
-            pos = 17 + 4;
+            pos = 17 + 4
       else:
          if mode != 3:
-            pos = 17 + 4;
+            pos = 17 + 4
          else:
-            pos = 9 + 4;
+            pos = 9 + 4
       head = frame[pos:pos+4]
       self.vbr = (head == 'Xing') and True or False
       if head not in ['Xing', 'Info']:
           return 0
-      TRACE_MSG("%s header detected @ %x" % (head, pos));
-      pos += 4;
+      TRACE_MSG("%s header detected @ %x" % (head, pos))
+      pos += 4
 
       # Read Xing flags.
-      headFlags = bin2dec(bytes2bin(frame[pos:pos + 4]));
-      pos += 4;
-      TRACE_MSG("%s header flags: 0x%x" % (head, headFlags));
+      headFlags = bin2dec(bytes2bin(frame[pos:pos + 4]))
+      pos += 4
+      TRACE_MSG("%s header flags: 0x%x" % (head, headFlags))
 
       # Read frames header flag and value if present
       if headFlags & FRAMES_FLAG:
-         self.numFrames = bin2dec(bytes2bin(frame[pos:pos + 4]));
-         pos += 4;
-         TRACE_MSG("%s numFrames: %d" % (head, self.numFrames));
+         self.numFrames = bin2dec(bytes2bin(frame[pos:pos + 4]))
+         pos += 4
+         TRACE_MSG("%s numFrames: %d" % (head, self.numFrames))
 
       # Read bytes header flag and value if present
       if headFlags & BYTES_FLAG:
-         self.numBytes = bin2dec(bytes2bin(frame[pos:pos + 4]));
-         pos += 4;
-         TRACE_MSG("%s numBytes: %d" % (head, self.numBytes));
+         self.numBytes = bin2dec(bytes2bin(frame[pos:pos + 4]))
+         pos += 4
+         TRACE_MSG("%s numBytes: %d" % (head, self.numBytes))
 
       # Read TOC header flag and value if present
       if headFlags & TOC_FLAG:
-         i = 0;
-         self.toc = frame[pos:pos + 100];
-         pos += 100;
-         TRACE_MSG("%s TOC (100 bytes): PRESENT" % head);
+         i = 0
+         self.toc = frame[pos:pos + 100]
+         pos += 100
+         TRACE_MSG("%s TOC (100 bytes): PRESENT" % head)
       else:
-         TRACE_MSG("%s TOC (100 bytes): NOT PRESENT" % head);
+         TRACE_MSG("%s TOC (100 bytes): NOT PRESENT" % head)
 
       # Read vbr scale header flag and value if present
       if headFlags & VBR_SCALE_FLAG and head == 'Xing':
-         self.vbrScale = bin2dec(bytes2bin(frame[pos:pos + 4]));
-         pos += 4;
-         TRACE_MSG("%s vbrScale: %d" % (head, self.vbrScale));
+         self.vbrScale = bin2dec(bytes2bin(frame[pos:pos + 4]))
+         pos += 4
+         TRACE_MSG("%s vbrScale: %d" % (head, self.vbrScale))
 
-      return 1;
+      return 1
 
 #######################################################################
 class LameTag(dict):
