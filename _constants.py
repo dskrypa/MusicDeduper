@@ -116,7 +116,7 @@ tagTypes= {
 	"ITNU": "iTunesU? [invalid]",
 	"TCAT": "Podcast Category? [invalid]",
 	"MJCF": "MediaJukebox? [invalid]",
-};
+}
 
 v1_genres = [
 	"Blues",
@@ -311,4 +311,4 @@ v1_genres = [
 	"Dubstep",
 	"Garage Rock",
 	"Psybient"
-];
+]
