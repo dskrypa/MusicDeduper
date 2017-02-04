@@ -142,7 +142,7 @@ def main():
                 tfmt = "{0[ver]} {0[id]} {1:" + str(lttdl) + "} {0[val]}"
                 for tag in stags:
                     tid = tag["id"]
-                    if ((tid in toShow) and ((toShow[tid] == None) or (int(tag["ver"]) == toShow[tid]))):
+                    if ((tid in toShow) and ((toShow[tid] is None) or (int(tag["ver"]) == toShow[tid]))):
                         clio.printf(tfmt, tag, tagTypes[tid])
         
         if reorganize:
@@ -165,7 +165,7 @@ def main():
                     basedir = args.copy if copyMode else args.move
                     basedir = basedir[:-1] if (basedir[-1:] == "/") else basedir
                     npath = song.getNewPath()
-                    npath = opath if (npath == None) else npath
+                    npath = opath if (npath is None) else npath
                     rpath = npath[len(basedir):] 
                     dpath = "/dupe_better" if better else "/dupe_worse"
                     moves[opath].setNewPath(basedir + dpath + rpath)
@@ -215,7 +215,7 @@ def getWidths(dict):
 
 class PlacementManager():
     def __init__(self, ddir):
-        self.analyzeOnly = (ddir == None)
+        self.analyzeOnly = (ddir is None)
         if not self.analyzeOnly:
             self.ddir = ddir[:-1] if (ddir[-1:] == "/") else ddir
         else:
@@ -300,7 +300,7 @@ class PlacementManager():
                 npath = "{}artists/{}".format(self.bdir, xartist[:255])
             return self.getUnusedName(song, npath, oldFname)
         else:
-            if (tnum == None):
+            if (tnum is None):
                 tn = "XX"
             else:
                 try:
@@ -332,7 +332,7 @@ class PlacementManager():
     def getUnusedName(self, song, basedir, fname, ext=None):
         bpath = basedir[:-1] if (basedir[-1:] == "/") else basedir
         basename = fname
-        if (ext == None):
+        if (ext is None):
             ppos = fname.rfind(".")
             if (ppos != -1):
                 basename = fname[:ppos]
@@ -347,7 +347,7 @@ class PlacementManager():
             if os.path.exists(fpath):
                 if (fpath == song.fpath):                                        #If this is the same file, then it shouldn't be moved
                     return None
-                if (shash == None):
+                if (shash is None):
                     shash = hashlib.sha512(open(song.fpath,"rb").read()).hexdigest()
                 fhash = hashlib.sha512(open(fpath,"rb").read()).hexdigest()
                 if (shash == fhash):

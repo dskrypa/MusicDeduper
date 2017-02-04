@@ -49,7 +49,7 @@ def getFilteredPaths(path, ext, sort=True):
 def getUnusedPath(rpath, fname, ext=None):
     rpath = rpath[:-1] if (rpath[-1:] == "/") else rpath
     basename = fname
-    if (ext == None):
+    if (ext is None):
         ppos = fname.rfind(".")
         if (ppos != -1):
             basename = fname[:ppos]
@@ -68,7 +68,7 @@ def getUnusedPath(rpath, fname, ext=None):
 
 def cleanup(strng):
     '''Returns a string that is usable in a file name, else None'''
-    if (strng == None) or (len(strng) < 1):
+    if (strng is None) or (len(strng) < 1):
         return None
     pass1 = _badpath.sub('', strng)                                            #Remove any characters invalid in filenames
     pass2 = re.sub(r'\s+',' ',pass1).strip()                                    #Remove extraneous spaces
@@ -111,7 +111,7 @@ class PerfTimer():
         return self.now()                                                        #Return the current time using the same method as the internal timer
 
     def elapsed(self, since=None):
-        sinceTime = self.start if (since == None) else since
+        sinceTime = self.start if (since is None) else since
         return self.now() - sinceTime                                            #Return the time delta in seconds since initialization
 
     def elapsedf(self, since=None):

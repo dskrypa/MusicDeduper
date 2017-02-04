@@ -54,7 +54,7 @@ def main():
     #Parse and process the given command line arguments
     args = parser.parse_args()
 
-    if (args.comp_mode == None):                                                #If the compare mode was not provided
+    if (args.comp_mode is None):                                                #If the compare mode was not provided
         parser.print_help()                                                     #Print the help text
         parser.exit(0, "Compare mode is a required parameter!\n")                #Exit
     elif not args.list:
@@ -148,7 +148,7 @@ class DeDuper():
         self.log2("Scanning for saved hashes...")
         hashes = HashList(self.mode, self.save_dir)                            #Initialize a new HashList with the mode and save location
         
-        if (self.ddir == None):
+        if (self.ddir is None):
             return hashes
         
         paths = getFilteredPaths(self.ddir, "mp3")
@@ -297,7 +297,7 @@ class HashList():
     '''
     def __init__(self, mode, save_dir=None):
         self.hashes = {}                                                        #Initialize the dictionary for storing hashes
-        if (save_dir == None):
+        if (save_dir is None):
             self.save = False
         else:
             self.save = True        

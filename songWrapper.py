@@ -103,7 +103,7 @@ class Song():
         return changed
     
     def _trimTags(self, af):
-        if (af.tag == None): return None
+        if (af.tag is None): return None
         fs = af.tag.frame_set
         ver = af.tag.version
         tver = "[" + str(ver[0] + (ver[1]/10)) + "]"
@@ -132,7 +132,7 @@ class Song():
         return changed
     
     def _addTagsFromAudioFile(self, af):
-        if (af.tag == None): return
+        if (af.tag is None): return
         if (af.info is not None):
             self.bitrate = af.info.mp3_header.bit_rate
         else:
@@ -171,7 +171,7 @@ class Song():
             if (af.tag is not None):                                                #If there are any tags
                 for tagid in toRemove:                                            #Iterate through the tags to be removed
                     trv = toRemove[tagid]                                        #Get the version to be removed
-                    if (trv == None) or (int(trv) == v):                        #If the version isn't set or matches the selected version
+                    if (trv is None) or (int(trv) == v):                        #If the version isn't set or matches the selected version
                         if (tagid in af.tag.frame_set):                            #If the tag id is present in the file
                             af.tag.frame_set.pop(tagid)                        #Remove it
                             changed = True                                        #Indicate that a change was made that should be saved
@@ -262,7 +262,7 @@ class Song():
             return True
         
         album = self.getTagVal("TALB", True)
-        if ((album == None) or (len(album) < 1)):
+        if ((album is None) or (len(album) < 1)):
             return False
         album = album.lower()
         for ci in compIndicatorsB:
@@ -281,7 +281,7 @@ class Song():
 
 
 def normalize(strng):
-    if (strng == None) or (len(strng) < 1):
+    if (strng is None) or (len(strng) < 1):
         return strng
     return strng.lower().replace(" ","")
 
