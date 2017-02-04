@@ -1,10 +1,10 @@
 #!/usr/bin/env python2
 
-'''
+"""
 Author: Douglas Skrypa
 Date: 2017.02.04
 Version: 8.1.1
-'''
+"""
 
 from __future__ import division
 import sys
@@ -101,9 +101,9 @@ class HashException(Exception):
         return repr(self.value)
 
 class DeDuper():
-    '''
+    """
     Class to wrap the methods used for deduping music in a given directory
-    '''
+    """
     def __init__(self, sdir, ddir, lpath, save_dir):
         self.debugMode = True
         self.sdir = sdir
@@ -117,9 +117,9 @@ class DeDuper():
         return self.processDirectory(skip)
     
     def getHash(self, fpath):
-        '''
+        """
         Calculates and returns the hash for the given file based on the current mode
-        '''
+        """
         if fpath[-3:].lower() != "mp3":
             raise HashException("Skipping non-mp3 file: " + fpath)
         elif self.mode == Modes.audio:
@@ -142,9 +142,9 @@ class DeDuper():
             raise HashException("Invalid mode!")
     
     def getExistingHashes(self):
-        '''
+        """
         Builds dictionary of hashes of files already in the destination dir
-        '''
+        """
         self.log2("Scanning for saved hashes...")
         hashes = HashList(self.mode, self.save_dir)                            #Initialize a new HashList with the mode and save location
         
@@ -292,9 +292,9 @@ class DeDuper():
 
 
 class HashList():
-    '''
+    """
     A list of file hashes that saves the values to file so they can be recovered later
-    '''
+    """
     def __init__(self, mode, save_dir=None):
         self.hashes = {}                                                        #Initialize the dictionary for storing hashes
         if save_dir is None:

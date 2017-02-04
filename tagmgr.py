@@ -1,10 +1,10 @@
 #!/usr/bin/env python2
 
-'''
+"""
 Author: Douglas Skrypa
 Date: 2017.02.04
 Version: 4.4
-'''
+"""
 
 from __future__ import division, unicode_literals
 import sys
@@ -359,7 +359,7 @@ class PlacementManager():
 
 
 def sint(val):
-    '''If val is castable to an integer, returns that integer, otherwise returns None'''
+    """If val is castable to an integer, returns that integer, otherwise returns None"""
     try:
         return int(val)
     except ValueError:

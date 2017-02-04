@@ -1,10 +1,10 @@
 #!/usr/bin/env python2
 
-'''
+"""
 Author: Douglas Skrypa
 Date: 2017.02.04
 Version: 1.6.1
-'''
+"""
 
 from __future__ import division, unicode_literals
 
@@ -26,10 +26,10 @@ _badpath = re.compile(u'[\u0000-\u001F\u007F-\u009F/$!@#<>"\'|:*%?\\\\]', re.U)
 
 
 def getPaths(path):
-    '''
+    """
     Recursively generates a list of absolute paths for every file discoverable
     via the given path.
-    '''
+    """
     path = path[:-1] if (path[-1:] == "/") else path                            #Strip trailing slash if it exists
     path = unicode(path)
     paths = []                                                                    #Initialize list to store paths in
@@ -70,7 +70,7 @@ def getUnusedPath(rpath, fname, ext=None):
 
 
 def cleanup(strng):
-    '''Returns a string that is usable in a file name, else None'''
+    """Returns a string that is usable in a file name, else None"""
     if (strng is None) or (len(strng) < 1):
         return None
     pass1 = _badpath.sub('', strng)                                            #Remove any characters invalid in filenames
@@ -105,7 +105,7 @@ def longestString(lst):
 
 
 class PerfTimer():
-    '''Simple performance monitor including a timer and counters'''
+    """Simple performance monitor including a timer and counters"""
     def __init__(self):
         self.now = time.time if PY2 else time.perf_counter
         self.start = self.now()                                                #Initialize the timer with the current time
@@ -122,12 +122,12 @@ class PerfTimer():
 
 
 class clio():
-    '''Command Line Interface Output'''
+    """Command Line Interface Output"""
     lml = 0                                                                    #Last message length
     lastWasShow = False
     @classmethod
     def _fmt(cls, msg):
-        '''Format the given message for overwriting'''
+        """Format the given message for overwriting"""
         mlen = len(msg)                                                        #Length of the current message
         ldelta = clio.lml - mlen
         clio.lml = mlen                                                        #Store the current message's length as the last message length
@@ -136,7 +136,7 @@ class clio():
 
     @classmethod
     def show(cls, msg=""):
-        '''Display overwritable message'''
+        """Display overwritable message"""
         msg = msg[:tcols-1]
         fmsg = cls._fmt(msg)
         sys.stdout.write(fmsg)
@@ -145,7 +145,7 @@ class clio():
 
     @classmethod
     def showf(cls, fmt, *args):
-        '''Display formatted overwritable message'''
+        """Display formatted overwritable message"""
         msg = fmt.format(*args)
         msg = msg[:tcols-1]
         cls.show(msg)
@@ -153,7 +153,7 @@ class clio():
 
     @classmethod
     def println(cls, msg=""):
-        '''Display message on a new line'''
+        """Display message on a new line"""
         fmsg = cls._fmt(msg) + "\n"
         sys.stdout.write(fmsg)
         sys.stdout.flush()
@@ -161,14 +161,14 @@ class clio():
 
     @classmethod
     def printf(cls, fmt, *args):
-        '''Display formatted message on a new line'''
+        """Display formatted message on a new line"""
         msg = fmt.format(*args)
         cls.println(msg)
         clio.lastWasShow = False
 
 
 class ErrorLog():
-    '''Simple error log that includes a date+time stamp for each line'''
+    """Simple error log that includes a date+time stamp for each line"""
     def __init__(self, path):
         self.logfile = open(path, "a")
         self.tfmt = "%Y-%m-%d_%H:%M:%S"
