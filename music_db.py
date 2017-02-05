@@ -7,8 +7,10 @@ import sqlite3
 import logging
 from operator import itemgetter
 from collections import OrderedDict
+from cachetools import cached
 
-from common import InputValidationException, itemfinder
+from lib.common import InputValidationException, itemfinder
+from lib.log_handling import LogManager
 
 OperationalError = sqlite3.OperationalError
 
@@ -18,16 +20,21 @@ class Sqlite3Database:
     None -> NULL, int -> INTEGER, long -> INTEGER, float -> REAL, str -> TEXT, unicode -> TEXT, buffer -> BLOB
     """
     def __init__(self, db_path=None):
-        self.db_path = os.path.expanduser(db_path if db_path is not None else "/var/tmp/deduper_music.db")
+        #self.db_path = os.path.expanduser(db_path if db_path is not None else "/var/tmp/deduper_music.db")
+        self.db_path = os.path.expanduser(db_path if db_path is not None else ":memory:")
         if self.db_path != ":memory:":
             db_dir = os.path.dirname(self.db_path)
             if not os.path.exists(db_dir):
                 os.makedirs(db_dir)
         self.db = sqlite3.connect(self.db_path)
-        self.c = self.db.cursor()
 
     def execute(self, *args, **kwargs):
+        """
+        Auto commit/rollback on exception via with statement
+        :return Cursor: Sqlite3 cursor
+        """
         with self.db:
+            logging.debug("Executing SQL: {}".format(", ".join(map("\"{}\"".format, args))))
             return self.db.execute(*args, **kwargs)
 
     def create_table(self, name, columns):
@@ -51,6 +58,7 @@ class Sqlite3Database:
     def __contains__(self, item):
         return self.table_exists(item)
 
+    @cached({})
     def __getitem__(self, item):
         if item not in self:
             raise KeyError("Table '{}' does not exist in this DB".format(item))
@@ -58,7 +66,7 @@ class Sqlite3Database:
 
     def __iter__(self):
         for table in self.get_table_names():
-            yield DBTable(self, table)
+            yield self[table]
 
     def insert(self, table, row):
         """
@@ -83,7 +91,7 @@ class Sqlite3Database:
         if results.description is None:
             raise OperationalError("No Results.")
         headers = [fields[0] for fields in results.description]
-        return [dict(zip(headers, row)) for row in results]
+        return [OrderedDict(zip(headers, row)) for row in results]
 
     def iterquery(self, query):
         results = self.execute(query)
@@ -91,7 +99,7 @@ class Sqlite3Database:
             raise OperationalError("No Results.")
         headers = [fields[0] for fields in results.description]
         for row in results:
-            yield dict(zip(headers, row))
+            yield OrderedDict(zip(headers, row))
 
     def select(self, columns, table, where=None):
         """
@@ -128,35 +136,33 @@ class Sqlite3Database:
         self.insert("test_1", [1, "line2"])
 
 
-class DBRow(dict):
+class DBRow(OrderedDict):
     def __init__(self, db_table, *args, **kwargs):
         """
         :param DBTable db_table: DBTable in which this row resides
         :param args: dict positional args
         :param kwargs: dict kwargs
         """
+        self.table = None
         super(DBRow, self).__init__(*args, **kwargs)
         self.table = db_table
         self.pk = self.table.pk
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value, *args, **kwargs):
+        if self.table is None:
+            super(DBRow, self).__setitem__(key, value, *args, **kwargs)
+            return
+
         if (key in self) and (self[key] == value):
             return
         elif key == self.pk:
             raise KeyError("Unable to change PrimaryKey ('{}')".format(self.pk))
         elif key not in self:
             raise KeyError("Unable to add additional key: {}".format(key))
-        self.table.update_row(self[self.table.pk], key, value)
-        super(DBRow, self).__setitem__(key, value)
+        self.table.update_row(self[self.pk], key, value)
+        super(DBRow, self).__setitem__(key, value, *args, **kwargs)
 
-    def update(self, E=None, **F):
-        if E is not None:
-            for k, v in E.iteritems():
-                self[k] = v
-        for k, v in F.iteritems():
-            self[k] = v
-
-    def popitem(self):
+    def popitem(self, *args, **kwargs):
         raise NotImplementedError("popitem is not permitted on DBRow objects")
 
     def pop(self, k, d=None):
@@ -165,7 +171,7 @@ class DBRow(dict):
     def clear(self):
         raise NotImplementedError("clear is not permitted on DBRow objects")
 
-    def __delitem__(self, key):
+    def __delitem__(self, *args, **kwargs):
         raise NotImplementedError("del is not permitted on DBRow objects")
 
 
@@ -179,6 +185,7 @@ class DBTable:
         """
         self.db = parent_db
         self.name = table
+        self._rows = {}
         table_exists = self.db.table_exists(self.name)
 
         if (columns is None) and (not table_exists):
@@ -254,27 +261,33 @@ class DBTable:
         return val
 
     def __contains__(self, item):
+        if item in self._rows:
+            return True
         return bool(self.db.select("*", self.name, "{}={}".format(self.pk, self._fmt_pk_val(item))))
 
     def rows(self):
-        return [DBRow(self, row) for row in self.db.select("*", self.name)]
-
-    def iterrows(self):
-        for row in self.db.select("*", self.name):
-            yield DBRow(self, row)
+        return [row for row in iter(self)]
 
     def __iter__(self):
         for row in self.db.select("*", self.name):
-            yield DBRow(self, row)
+            pk = row[self.pk]
+            if pk not in self._rows:
+                self._rows[pk] = DBRow(self, row)
+            yield self._rows[pk]
+
+    iterrows = __iter__
 
     def __getitem__(self, item):
-        results = self.db.select("*", self.name, "{}={}".format(self.pk, self._fmt_pk_val(item)))
-        if not results:
-            raise KeyError(item)
-        return DBRow(self, results[0])
+        if item not in self._rows:
+            results = self.db.select("*", self.name, "{}={}".format(self.pk, self._fmt_pk_val(item)))
+            if not results:
+                raise KeyError(item)
+            self._rows[item] = DBRow(self, results[0])
+        return self._rows[item]
 
     def __delitem__(self, key):
         if key in self:
+            self._rows.pop(key)
             self.db.delete_row(self.name, "{}={}".format(self.pk, self._fmt_pk_val(key)))
         else:
             raise KeyError(key)
@@ -323,7 +336,7 @@ class DBTable:
 
 
 
-class MusicDB:
+class MusicDB(Sqlite3Database):
     def __init__(self, db_path=None):
         self.db_path = os.path.expanduser(db_path if db_path is not None else "/var/tmp/deduper_music.db")
 
@@ -333,3 +346,7 @@ class MusicDB:
 
         self.db = sqlite3.connect(self.db_path)
         self.c = self.db.cursor()
+
+
+if __name__ == "__main__":
+    lm = LogManager.create_default_stream_logger(True)
