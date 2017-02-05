@@ -15,8 +15,9 @@ import eyeD3b as eyeD3  #A version of eyeD3 with a kludge added by me to make it
 
 from lib.common import InputValidationException, getFilteredPaths
 from lib.log_handling import LogManager, OutputManager
-from lib.sqlite3_db import Sqlite3Database, DBTable
-from lib.output_formatting import fTime
+#from lib.sqlite3_db import Sqlite3Database, DBTable
+from lib.alchemy_db import AlchemyDatabase, DBTable
+from lib.output_formatting import fTime, Printer
 
 open = codecs.open
 
@@ -24,39 +25,61 @@ open = codecs.open
 class HashModes(Enum):
     AUDIO = 1; FULL = 2
 
+db_default_paths = {
+    HashModes.AUDIO: "/var/tmp/deduper_audio_hash.db",
+    HashModes.FULL: "/var/tmp/deduper_full_hash.db"
+}
+
 
 def main():
     parser = argparse.ArgumentParser(description="Music collection deduper")
-    parser.add_argument("scan_dir", help="The directory to scan for music")
+    sparsers = parser.add_subparsers(dest="action")
 
-    cmgroup = parser.add_argument_group("Compare Modes (required)")
+    parser1 = sparsers.add_parser("scan", help="Scan the given directory")
+    parser1.add_argument("scan_dir", help="The directory to scan for music")
+    cmgroup = parser1.add_argument_group("Compare Modes (required)")
     cmgroup.add_argument("--audio", "-a", help="Compare files based on a hash of the audio content (slower)", dest="hash_mode", action="store_const", const=HashModes.AUDIO)
     cmgroup.add_argument("--full", "-f", help="Compare files based on a hash of the entire file (faster)", dest="hash_mode", action="store_const", const=HashModes.FULL)
 
-    parser.add_argument("--debug", "-d", action="store_true", default=False, help="Log additional debugging information (default: %(default)s)")
-    parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Log more verbose information (default: %(default)s)")
-    args = parser.parse_args()
+    parser2 = sparsers.add_parser("view", help="View current DB")
+    cmgroup = parser2.add_argument_group("Compare Modes (required)")
+    cmgroup.add_argument("--audio", "-a", help="Compare files based on a hash of the audio content (slower)", dest="hash_mode", action="store_const", const=HashModes.AUDIO)
+    cmgroup.add_argument("--full", "-f", help="Compare files based on a hash of the entire file (faster)", dest="hash_mode", action="store_const", const=HashModes.FULL)
 
-    if not args.hash_mode:
-        parser.print_help()
-        parser.exit()
+    for _parser in sparsers.choices.values() + [parser]:
+        _parser.add_argument("--debug", "-d", action="store_true", default=False, help="Log additional debugging information (default: %(default)s)")
+        _parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Log more verbose information (default: %(default)s)")
+    args = parser.parse_args()
 
     lm, log_path = LogManager.create_default_logger(args.debug, args.verbose)
     logging.info("Logging to: {}".format(log_path))
 
-    deduper = Deduper(args.hash_mode, lm)
-    deduper.scan(args.scan_dir)
+    if args.action == "scan":
+        if not args.hash_mode:
+            parser.print_help()
+            parser.exit()
+
+        deduper = Deduper(args.hash_mode, lm)
+        deduper.scan(args.scan_dir)
+    elif args.action == "view":
+        if not args.hash_mode:
+            parser.print_help()
+            parser.exit()
+
+        p = Printer("table")
+        db = AlchemyDatabase(db_default_paths[args.hash_mode])
+        p.pprint([row.as_dict() for row in db["music"].rows()], include_header=True, add_bar=True)
 
 
 class Deduper:
     def __init__(self, hash_mode, log_manager):
         if hash_mode not in HashModes:
             raise InputValidationException("Invalid hash mode: {}".format(hash_mode))
-        db_path = "/var/tmp/deduper_audio_hash.db" if hash_mode == HashModes.AUDIO else "/var/tmp/deduper_full_hash.db"
-        self.db = Sqlite3Database(db_path)
+        self.db = AlchemyDatabase(db_default_paths[hash_mode])
         self.music = DBTable(self.db, "music", ["path", "modified", "size", "hash"], "path")
         self.hash_mode = hash_mode
         self.lm = OutputManager(log_manager)
+        self.p = Printer("json-pretty")
 
     def hash(self, file_path):
         if os.path.splitext(file_path)[1] != ".mp3":

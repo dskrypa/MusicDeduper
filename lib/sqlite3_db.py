@@ -14,7 +14,7 @@ from log_handling import LogManager
 OperationalError = sqlite3.OperationalError
 
 
-class Sqlite3Database(object):
+class Sqlite3Database:
     """
     None -> NULL, int -> INTEGER, long -> INTEGER, float -> REAL, str -> TEXT, unicode -> TEXT, buffer -> BLOB
     """

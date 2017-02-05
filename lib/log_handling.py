@@ -265,6 +265,6 @@ class OutputManager:
         _uout.flush()
 
     def printf(self, fmt_str, *args, **kwargs):
-        msg = fmt_str.format(args) if len(args) > 0 else fmt_str
+        msg = fmt_str.format(*args) if len(args) > 0 else fmt_str
         _uout.write(self.fmt(msg, **kwargs))
         _uout.flush()

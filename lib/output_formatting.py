@@ -132,7 +132,7 @@ class Printer:
     formats = ["json", "json-pretty", "text", "yaml", "pprint", "csv", "table"]
     
     def __init__(self, output_format):
-        if output_format is None or output_format in Printer.format:
+        if output_format is None or output_format in Printer.formats:
             self.output_format = output_format
         else:
             raise InputValidationException("Invalid output format: {} (valid options: {})".format(output_format, Printer.formats))
