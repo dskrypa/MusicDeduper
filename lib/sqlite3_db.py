@@ -7,7 +7,6 @@ import sqlite3
 import logging
 from operator import itemgetter
 from collections import OrderedDict
-from cachetools import cached
 
 from common import InputValidationException, itemfinder
 from log_handling import LogManager
@@ -20,13 +19,13 @@ class Sqlite3Database(object):
     None -> NULL, int -> INTEGER, long -> INTEGER, float -> REAL, str -> TEXT, unicode -> TEXT, buffer -> BLOB
     """
     def __init__(self, db_path=None):
-        #self.db_path = os.path.expanduser(db_path if db_path is not None else "/var/tmp/deduper_music.db")
         self.db_path = os.path.expanduser(db_path if db_path is not None else ":memory:")
         if self.db_path != ":memory:":
             db_dir = os.path.dirname(self.db_path)
             if not os.path.exists(db_dir):
                 os.makedirs(db_dir)
         self.db = sqlite3.connect(self.db_path)
+        self._tables = {}
 
     def execute(self, *args, **kwargs):
         """
@@ -37,12 +36,17 @@ class Sqlite3Database(object):
             logging.debug("Executing SQL: {}".format(", ".join(map("\"{}\"".format, args))))
             return self.db.execute(*args, **kwargs)
 
-    def create_table(self, name, columns):
+    def create_table(self, name, *args, **kwargs):
         """
-        :param name: Table name
-        :param list columns: Column names
+        :param name: Name of the table to create
+        :param args: DBTable positional args
+        :param kwargs: DBTable kwargs
+        :return DBTable: DBTable object that represents the created table
         """
-        self.execute("CREATE TABLE {} ({});".format(name, ", ".join(columns)))
+        if name in self:
+            raise KeyError("{} already exists".format(name))
+        self._tables[name] = DBTable(self, name, *args, **kwargs)
+        return self._tables[name]
 
     def drop_table(self, name, vacuum=True):
         """
@@ -51,89 +55,87 @@ class Sqlite3Database(object):
         :param name: Name of the table to be dropped
         :param bool vacuum: Perform VACUUM after dropping the table
         """
-        self.execute("DROP TABLE {};".format(name))
+        del self[name]
         if vacuum:
             self.execute("VACUUM;")
 
     def __contains__(self, item):
-        return self.table_exists(item)
+        if item in self._tables:
+            return True
+        return item in self.get_table_names()
 
-    @cached({})
     def __getitem__(self, item):
-        if item not in self:
-            raise KeyError("Table '{}' does not exist in this DB".format(item))
-        return DBTable(self, item)
+        if item not in self._tables:
+            if item not in self:
+                raise KeyError("Table '{}' does not exist in this DB".format(item))
+            self._tables[item] = DBTable(self, item)
+        return self._tables[item]
+
+    def __delitem__(self, key):
+        if key in self:
+            self.execute('DROP TABLE "{}";'.format(key))
+            del self._tables[key]
+        else:
+            raise KeyError(key)
 
     def __iter__(self):
         for table in self.get_table_names():
             yield self[table]
 
-    def insert(self, table, row):
-        """
-        :param table: Table name
-        :param list row: Values
-        """
-        self.execute("INSERT INTO {} VALUES ({});".format(table, ("?," * len(row))[:-1]), tuple(row))
-
-    def update(self, table, where, **set_args):
-        set_strs = ["{} = {}".format(k, "'{}'".format(v) if isinstance(v, (str, unicode)) else v) for k, v in set_args.iteritems()]
-        self.execute("UPDATE {} SET {} WHERE {};".format(table, ", ".join(set_strs), where))
-
-    def delete_row(self, table, where):
-        self.execute("DELETE FROM {} WHERE {};".format(table, where))
-
-    def query(self, query):
+    def query(self, query, *args, **kwargs):
         """
         :param query: Query string
-        :return list: Result rows
+        :return list: Result rows as OrderedDicts
         """
-        results = self.execute(query)
+        results = self.execute(query, *args, **kwargs)
         if results.description is None:
             raise OperationalError("No Results.")
         headers = [fields[0] for fields in results.description]
         return [OrderedDict(zip(headers, row)) for row in results]
 
-    def iterquery(self, query):
-        results = self.execute(query)
+    def iterquery(self, query, *args, **kwargs):
+        results = self.execute(query, *args, **kwargs)
         if results.description is None:
             raise OperationalError("No Results.")
         headers = [fields[0] for fields in results.description]
         for row in results:
             yield OrderedDict(zip(headers, row))
 
-    def select(self, columns, table, where=None):
+    def select(self, columns, table, where_mode="AND", **where_args):
         """
         SELECT $columns FROM $table (WHERE $where);
         :param columns: Column name(s)
         :param table: Table name
-        :param where: Conditional expression string
+        :param where_mode: Mode to apply subsequent WHERE arguments (AND or OR)
+        :param where_args: key=value pairs that need to be matched for data to be returned
         :return list: Result rows
         """
+        if table not in self:
+            raise KeyError(table)
+        elif where_mode not in ("AND", "OR"):
+            raise InputValidationException("Invalid where mode: {}".format(where_mode))
         cols = ", ".join(columns) if isinstance(columns, (list, tuple)) else columns
-        cond = " WHERE {}".format(where) if where is not None else ""
-        return self.query("SELECT {} FROM {}{};".format(cols, table, cond))
+        where_clip = (len(where_mode) + 2) * -1
+        where = ("? = ? {} ".format(where_mode) * len(where_args))[:where_clip] if len(where_args) > 0 else ""
+        where_list = []
+        for k, v in where_args.iteritems():
+            where_list.append(k)
+            where_list.append(v)
+        where_str = " WHERE " + where if where else ""
+        return self.query("SELECT {} FROM \"{}\"{};".format(cols, table, where_str), tuple(where_list))
 
     def get_table_names(self):
         """
         :return list: Names of tables in this DB
         """
-        return [row["name"] for row in self.select("name", "sqlite_master", "type='table'")]
-
-    def table_exists(self, table):
-        return bool(self.select("name", "sqlite_master", "type='table' AND name='{}'".format(table)))
-
-    def table_info(self, table):
-        return self.query("pragma table_info({})".format(table))
-
-    def column_names(self, table):
-        return [col["name"] for col in self.table_info(table)]
+        return [row["name"] for row in self.query("SELECT name FROM sqlite_master WHERE type='table';")]
 
     def test(self):
-        self.create_table("test_1", ["id INTEGER", "name TEXT"])
-        self.create_table("test_2", ["email TEXT", "name TEXT"])
-        self.insert("test_1", [0, "hello db"])
-        self.insert("test_2", ["bob@gmail.com", "bob"])
-        self.insert("test_1", [1, "line2"])
+        tbl1 = self.create_table("test_1", [("id", "INTEGER"), ("name", "TEXT")])
+        self.create_table("test_2", [("email", "TEXT"), ("name", "TEXT")])
+        tbl1.insert([0, "hello db"])
+        self["test_2"].insert(["bob@gmail.com", "bob"])
+        self["test_1"].insert([1, "line2"])
 
 
 class DBRow(OrderedDict):
@@ -159,7 +161,7 @@ class DBRow(OrderedDict):
             raise KeyError("Unable to change PrimaryKey ('{}')".format(self.pk))
         elif key not in self:
             raise KeyError("Unable to add additional key: {}".format(key))
-        self.table.update_row(self[self.pk], key, value)
+        self.table.db.execute('UPDATE "{}" SET "{}" = ? WHERE "{}" = ?;'.format(self.table.name, key, self.pk), (value, self[self.pk]))
         super(DBRow, self).__setitem__(key, value, *args, **kwargs)
 
     def popitem(self, *args, **kwargs):
@@ -176,23 +178,23 @@ class DBRow(OrderedDict):
 
 
 class DBTable:
-    def __init__(self, parent_db, table, columns=None, pk=None):
+    def __init__(self, parent_db, name, columns=None, pk=None):
         """
         :param AbstractDB parent_db: DB in which this table resides
-        :param table: Name of the table
+        :param name: Name of the table
         :param list columns: Column names
         :param pk: Primary key (defaults to the table's PK or the first column if not defined for the table)
         """
         self.db = parent_db
-        self.name = table
+        self.name = name
         self._rows = {}
-        table_exists = self.db.table_exists(self.name)
+        table_exists = self.name in self.db
 
         if (columns is None) and (not table_exists):
             raise InputValidationException("Columns are required for tables that do not already exist")
 
         if table_exists:
-            table_info = self.db.table_info(self.name)
+            table_info = self.info()
             current_names = [entry["name"] for entry in table_info]
             current_types = [entry["type"] for entry in table_info]
             pk_entry = itemfinder(table_info, itemgetter("pk"))
@@ -247,31 +249,29 @@ class DBTable:
             col_strs = ["{} {}".format(cname, ctype) if ctype else cname for cname, ctype in self.columns.iteritems()]
             if pk is not None:
                 col_strs[self.pk_pos] += " PRIMARY KEY"
-            self.db.create_table(self.name, col_strs)
+            self.db.execute('CREATE TABLE "{}" ({});'.format(self.name, ", ".join(col_strs)))
 
-    def select(self, columns, where=None):
-        return self.db.select(columns, self.name, where)
+    def info(self):
+        return self.db.query("pragma table_info(\"{}\")".format(self.name))
+
+    def select(self, columns, where_mode="AND", **where_args):
+        return self.db.select(columns, self.name, where_mode, **where_args)
 
     def insert(self, row):
         if isinstance(row, dict):
             row = [row[k] for k in self.col_names]
-        self.db.insert(self.name, row)
-
-    def _fmt_pk_val(self, val):
-        if (self.columns[self.pk] == "TEXT") or isinstance(val, (str, unicode)):
-            return "'{}'".format(val)
-        return val
+        self.db.execute('INSERT INTO "{}" VALUES ({});'.format(self.name, ("?," * len(row))[:-1]), tuple(row))
 
     def __contains__(self, item):
         if item in self._rows:
             return True
-        return bool(self.db.select("*", self.name, "{}={}".format(self.pk, self._fmt_pk_val(item))))
+        return bool(self.select("*", **{self.pk: item}))
 
     def rows(self):
         return [row for row in iter(self)]
 
     def __iter__(self):
-        for row in self.db.select("*", self.name):
+        for row in self.select("*"):
             pk = row[self.pk]
             if pk not in self._rows:
                 self._rows[pk] = DBRow(self, row)
@@ -281,7 +281,7 @@ class DBTable:
 
     def __getitem__(self, item):
         if item not in self._rows:
-            results = self.db.select("*", self.name, "{}={}".format(self.pk, self._fmt_pk_val(item)))
+            results = self.select("*", **{self.pk: item})
             if not results:
                 raise KeyError(item)
             self._rows[item] = DBRow(self, results[0])
@@ -289,8 +289,8 @@ class DBTable:
 
     def __delitem__(self, key):
         if key in self:
-            self._rows.pop(key)
-            self.db.delete_row(self.name, "{}={}".format(self.pk, self._fmt_pk_val(key)))
+            self.db.execute('DELETE FROM "{}" WHERE "{}" = ?;'.format(self.name, self.pk), (key,))
+            del self._rows[key]
         else:
             raise KeyError(key)
 
@@ -332,9 +332,6 @@ class DBTable:
                 if len(value) != col_count:
                     row.insert(self.pk_pos, key)
             self.insert(row)
-
-    def update_row(self, row_pk, key, value):
-        self.db.update(self.name, "{} = {}".format(self.pk, self._fmt_pk_val(row_pk)), **{key: value})
 
 
 if __name__ == "__main__":

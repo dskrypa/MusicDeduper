@@ -4,11 +4,8 @@ from __future__ import print_function, division, unicode_literals
 
 import os
 import re
-import time
 import codecs
 from contextlib import contextmanager
-
-from output_formatting import fTime
 
 open = codecs.open
 str = unicode
@@ -96,24 +93,3 @@ def cleanup(strng):
     pass1 = _badpath.sub("", strng)
     pass2 = re.sub("\s+", " ", pass1).strip()   #Condense multiple spaces into a single space
     return pass2 if (len(pass2) > 0) else None
-
-
-def longestString(lst):
-    return max(len(e) for e in lst)
-
-
-class PerfTimer():
-    """Simple performance monitor including a timer and counters"""
-    def __init__(self):
-        self.now = time.time
-        self.start = self.now()                                                #Initialize the timer with the current time
-
-    def time(self):
-        return self.now()                                                        #Return the current time using the same method as the internal timer
-
-    def elapsed(self, since=None):
-        sinceTime = self.start if (since is None) else since
-        return self.now() - sinceTime                                            #Return the time delta in seconds since initialization
-
-    def elapsedf(self, since=None):
-        return fTime(self.elapsed(since))                                        #Return the time delta as a string in the form HH:MM:SS
