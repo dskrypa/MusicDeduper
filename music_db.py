@@ -26,13 +26,16 @@ class Sqlite3Database:
         self.db = sqlite3.connect(self.db_path)
         self.c = self.db.cursor()
 
+    def execute(self, *args, **kwargs):
+        with self.db:
+            return self.db.execute(*args, **kwargs)
+
     def create_table(self, name, columns):
         """
         :param name: Table name
         :param list columns: Column names
         """
-        with self.db:
-            self.db.execute("CREATE TABLE {} ({});".format(name, ", ".join(columns)))
+        self.execute("CREATE TABLE {} ({});".format(name, ", ".join(columns)))
 
     def drop_table(self, name, vacuum=True):
         """
@@ -41,11 +44,9 @@ class Sqlite3Database:
         :param name: Name of the table to be dropped
         :param bool vacuum: Perform VACUUM after dropping the table
         """
-        with self.db:
-            self.db.execute("DROP TABLE {};".format(name))
+        self.execute("DROP TABLE {};".format(name))
         if vacuum:
-            with self.db:
-                self.db.execute("VACUUM;")
+            self.execute("VACUUM;")
 
     def __contains__(self, item):
         return self.table_exists(item)
@@ -64,38 +65,33 @@ class Sqlite3Database:
         :param table: Table name
         :param list row: Values
         """
-        with self.db:
-            self.db.execute("INSERT INTO {} VALUES ({});".format(table, ("?," * len(row))[:-1]), tuple(row))
+        self.execute("INSERT INTO {} VALUES ({});".format(table, ("?," * len(row))[:-1]), tuple(row))
 
     def update(self, table, where, **set_args):
         set_strs = ["{} = {}".format(k, "'{}'".format(v) if isinstance(v, (str, unicode)) else v) for k, v in set_args.iteritems()]
-        with self.db:
-            self.db.execute("UPDATE {} SET {} WHERE {};".format(table, ", ".join(set_strs), where))
+        self.execute("UPDATE {} SET {} WHERE {};".format(table, ", ".join(set_strs), where))
 
     def delete_row(self, table, where):
-        with self.db:
-            self.db.execute("DELETE FROM {} WHERE {};".format(table, where))
+        self.execute("DELETE FROM {} WHERE {};".format(table, where))
 
     def query(self, query):
         """
         :param query: Query string
         :return list: Result rows
         """
-        with self.db:
-            results = self.db.execute(query)
-            if results.description is None:
-                raise OperationalError("No Results.")
-            headers = [fields[0] for fields in results.description]
-            return [dict(zip(headers, row)) for row in results]
+        results = self.execute(query)
+        if results.description is None:
+            raise OperationalError("No Results.")
+        headers = [fields[0] for fields in results.description]
+        return [dict(zip(headers, row)) for row in results]
 
     def iterquery(self, query):
-        with self.db:
-            results = self.db.execute(query)
-            if results.description is None:
-                raise OperationalError("No Results.")
-            headers = [fields[0] for fields in results.description]
-            for row in results:
-                yield dict(zip(headers, row))
+        results = self.execute(query)
+        if results.description is None:
+            raise OperationalError("No Results.")
+        headers = [fields[0] for fields in results.description]
+        for row in results:
+            yield dict(zip(headers, row))
 
     def select(self, columns, table, where=None):
         """
