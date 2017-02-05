@@ -9,13 +9,13 @@ from operator import itemgetter
 from collections import OrderedDict
 from cachetools import cached
 
-from lib.common import InputValidationException, itemfinder
-from lib.log_handling import LogManager
+from common import InputValidationException, itemfinder
+from log_handling import LogManager
 
 OperationalError = sqlite3.OperationalError
 
 
-class Sqlite3Database:
+class Sqlite3Database(object):
     """
     None -> NULL, int -> INTEGER, long -> INTEGER, float -> REAL, str -> TEXT, unicode -> TEXT, buffer -> BLOB
     """
@@ -245,6 +245,8 @@ class DBTable:
 
         if not table_exists:
             col_strs = ["{} {}".format(cname, ctype) if ctype else cname for cname, ctype in self.columns.iteritems()]
+            if pk is not None:
+                col_strs[self.pk_pos] += " PRIMARY KEY"
             self.db.create_table(self.name, col_strs)
 
     def select(self, columns, where=None):
@@ -333,19 +335,6 @@ class DBTable:
 
     def update_row(self, row_pk, key, value):
         self.db.update(self.name, "{} = {}".format(self.pk, self._fmt_pk_val(row_pk)), **{key: value})
-
-
-
-class MusicDB(Sqlite3Database):
-    def __init__(self, db_path=None):
-        self.db_path = os.path.expanduser(db_path if db_path is not None else "/var/tmp/deduper_music.db")
-
-        db_dir = os.path.dirname(self.db_path)
-        if not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-
-        self.db = sqlite3.connect(self.db_path)
-        self.c = self.db.cursor()
 
 
 if __name__ == "__main__":

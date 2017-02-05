@@ -10,8 +10,10 @@ import getpass
 import logging
 from logging import handlers
 from termcolor import colored
+from subprocess import Popen, PIPE
 
-from common import InputValidationException
+from common import InputValidationException, ignore_exceptions
+from output_formatting import _uout, _uerr
 
 _filename = __file__
 
@@ -31,9 +33,15 @@ class LogManager:
             self.logger.handlers = []
         self.logger.setLevel(logging.NOTSET)    #Default is 30 / WARNING
         self.defaults = {"entry_format": entry_fmt, "date_format": date_fmt}
+        self.log_funcs = {}
         for fn in ("debug", "info", "warning", "error", "critical", "exception", "log"):
             setattr(self, fn, getattr(self.logger, fn))
-        self.add_level(19, "VERBOSE", "verbose")
+            self.log_funcs[fn] = getattr(self, fn)
+        with ignore_exceptions(InputValidationException):
+            self.add_level(19, "VERBOSE", "verbose")
+
+    def get_log_funcs(self):
+        return self.log_funcs
 
     @classmethod
     def create_default_stream_logger(cls, debug=False, verbose=False, *args, **kwargs):
@@ -122,18 +130,12 @@ class LogManager:
         :param level_name: Name of the level to add to the logging module
         :param fn_name: (optional) Function name if not the same as level_name (becomes an attribute of this LogManager)
         """
-        if level_name in logging._levelNames:
-            val = logging._levelNames[level_name]
-            raise InputValidationException("Log level called '{}' already exists: {}".format(level_name, val))
-        elif level_number in logging._levelNames:
-            val = logging._levelNames[level_number]
-            raise InputValidationException("Log level {} already exists: {}".format(level_number, val))
-
         fn_name = fn_name if fn_name is not None else level_name
         try:
             getattr(self, fn_name)
         except AttributeError:
-            logging.addLevelName(level_number, level_name)
+            if (level_name not in logging._levelNames) and (level_number not in logging._levelNames):
+                logging.addLevelName(level_number, level_name)
             self._add_log_function(level_number, fn_name)
         else:
             raise InputValidationException("This LogManager already has a method called '{}'".format(fn_name))
@@ -146,6 +148,7 @@ class LogManager:
         def _log(*args, **kwargs):
             self.logger.log(level_number, *args, **kwargs)
         setattr(self, fn_name, _log)
+        self.log_funcs[fn_name] = getattr(self, fn_name)
 
     def add_handler(self, destination, level=logging.INFO, fmt=None, date_fmt=None, filter=None, rotate=True, formatter=None):
         """
@@ -161,7 +164,7 @@ class LogManager:
         date_fmt = date_fmt if date_fmt is not None else self.defaults["date_format"]
         formatter = formatter if formatter is not None else logging.Formatter
 
-        if isinstance(destination, file) or (destination == sys.stdout) or (destination == sys.stderr):
+        if hasattr(destination, "write"):
             handler = logging.StreamHandler(destination)
         elif rotate:
             self._prep_log_dir(destination)
@@ -191,8 +194,8 @@ class LogManager:
         stdout_lvl = logging.getLevelName("VERBOSE") if verbose else logging.INFO
         stdout_lvl = logging.DEBUG if debug else stdout_lvl
         red_formatter = self.create_formatter(lambda rec: getattr(rec, "red", False), lambda msg: colored(msg, "red"))
-        self.add_handler(sys.stdout, stdout_lvl, filter=stdout_filter)
-        self.add_handler(sys.stderr, fmt="%(levelname)s %(message)s", filter=stderr_filter, formatter=red_formatter)
+        self.add_handler(_uout, stdout_lvl, filter=stdout_filter)
+        self.add_handler(_uerr, fmt="%(levelname)s %(message)s", filter=stderr_filter, formatter=red_formatter)
 
     def init_default_logger(self, debug=False, verbose=False, log_path=None):
         """
@@ -213,3 +216,55 @@ class LogManager:
         file_fmt = "%(asctime)s %(levelname)s %(funcName)s:%(lineno)d %(message)s"
         self.add_handler(log_path, logging.DEBUG, file_fmt, rotate=True)
         return log_path
+
+
+class OutputManager:
+    def __init__(self, log_manager, clip=True):
+        self.last_msg = ""
+        self.last_used_nl = True
+        self.term_cols = self.get_term_cols()
+        self.lm = log_manager
+        self.clip = clip
+        for fn_name in self.lm.get_log_funcs():
+            self._add_log_func(fn_name)
+
+    def _add_log_func(self, fn_name):
+        fn = getattr(self.lm, fn_name)
+        def _log(msg, *args, **kwargs):
+            fn(self.fmt(msg, True, True), *args, **kwargs)
+            self.need_newline = False
+        setattr(self, fn_name, _log)
+
+    def fmt(self, msg, end, log=False, append=False, color=None):
+        prefix = "" if self.last_used_nl or append else "\r"
+        suffix = "\n" if end and not log else ""
+        delta = len(self.last_msg) - len(msg)
+        pad = (" " * delta) if (delta > 0) and not self.last_used_nl else ""
+        self.last_msg = msg
+        self.last_used_nl = end
+        if color is not None:
+            msg = colored(msg, color)
+        msg = "{}{}{}{}".format(prefix, msg, pad, suffix)
+        return msg[:self.term_cols - 1] if self.clip else msg
+
+    @classmethod
+    def get_term_cols(cls):
+        return map(int, Popen("stty size", stdout=PIPE).communicate()[0].split())[1]
+
+    def update_width(self):
+        self.term_cols = self.get_term_cols()
+
+    def append(self, msg, end=False, color=None):
+        msg = self.fmt(msg, end, append=True, color=color)
+        _uout.write(msg)
+        _uout.flush()
+
+    def overwrite(self, msg="", end=False, color=None):
+        msg = self.fmt(msg, end, color=color)
+        _uout.write(msg)
+        _uout.flush()
+
+    def printf(self, fmt_str, *args, **kwargs):
+        msg = fmt_str.format(args) if len(args) > 0 else fmt_str
+        _uout.write(self.fmt(msg, **kwargs))
+        _uout.flush()
