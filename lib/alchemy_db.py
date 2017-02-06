@@ -47,7 +47,7 @@ class AlchemyDatabase:
         tbl1 = self.add_table("test_1", [("id", "INTEGER"), ("name", "TEXT")])
         self.add_table("test_2", [("email", "TEXT"), ("name", "TEXT")])
         tbl1.insert([0, "hello db"])
-        self["test_2"].insert(["bob@gmail.com", "bob"])
+        self["test_2"]["bob@gmail.com"] = ["bob"]
         self["test_1"].insert([1, "line2"])
 
 
@@ -115,7 +115,10 @@ class DBTable(object):
         return self.rows().filter_by(**kwargs)
 
     def __getitem__(self, key):
-        return self.session.query(self.rowType).filter_by(**{self.pk: key})[0]
+        try:
+            return self.session.query(self.rowType).filter_by(**{self.pk: key})[0]
+        except IndexError:
+            raise KeyError(key)
 
     def __contains__(self, key):
         return bool(self.session.query(self.rowType).filter_by(**{self.pk: key}).all())
