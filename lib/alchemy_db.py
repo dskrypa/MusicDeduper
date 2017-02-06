@@ -72,6 +72,17 @@ class DBTable(object):
                 for k, v in kwargs.iteritems():
                     row[k] = v
 
+            def keys(row):
+                return row.as_dict().keys()
+
+            def iteritems(row):
+                for k, v in row.as_dict().iteritems():
+                    yield k, v
+
+            def __iter__(row):
+                for k in row.as_dict():
+                    yield k
+
             def as_dict(row):
                 return OrderedDict([(c, getattr(row, c)) for c in self.columns])
 

@@ -68,7 +68,7 @@ def main():
 
         p = Printer("table")
         db = AlchemyDatabase(db_default_paths[args.hash_mode])
-        p.pprint([row.as_dict() for row in db["music"].rows()], include_header=True, add_bar=True)
+        p.pprint([row for row in db["music"].rows()], include_header=True, add_bar=True)
 
 
 class Deduper:
