@@ -54,7 +54,30 @@ class AlchemyDatabase:
 class DBTable(object):
     def __init__(self, parent_db, name, columns=None, pk=None):
         class DBRow(object):
-            pass
+            def __getitem__(row, key):
+                if key in self.columns:
+                    return getattr(row, key)
+                raise KeyError(key)
+
+            def __setitem__(row, key, value):
+                if key in self.columns:
+                    setattr(row, key, value)
+                else:
+                    raise KeyError(key)
+
+            def update(row, d=None, **kwargs):
+                if d is not None:
+                    for k, v in d.iteritems():
+                        row[k] = v
+                for k, v in kwargs.iteritems():
+                    row[k] = v
+
+            def as_dict(row):
+                return OrderedDict([(c, getattr(row, c)) for c in self.columns])
+
+            def __repr__(row):
+                return json.dumps(row.as_dict())
+
         self.db = parent_db
         self.name = name
         self.rowType = DBRow
@@ -87,35 +110,6 @@ class DBTable(object):
                 break
             c += 1
         assert self.pk is not None
-
-        def row_item_getter(row, key):
-            if key in self.columns:
-                return getattr(row, key)
-            raise KeyError(key)
-        self.rowType.__getitem__ = row_item_getter
-
-        def row_item_setter(row, key, value):
-            if key in self.columns:
-                setattr(row, key, value)
-            else:
-                raise KeyError(key)
-        self.rowType.__setitem__ = row_item_setter
-
-        def row_updater(row, d=None, **kwargs):
-            if d is not None:
-                for k, v in d.iteritems():
-                    row[k] = v
-            for k, v in kwargs.iteritems():
-                row[k] = v
-        self.rowType.update = row_updater
-
-        def row_repr(row):
-            return json.dumps(row.as_dict())
-        self.rowType.__repr__ = row_repr
-
-        def as_dict(row):
-            return OrderedDict([(c, getattr(row, c)) for c in self.columns])
-        self.rowType.as_dict = as_dict
 
     def select(self, **kwargs):
         return self.rows().filter_by(**kwargs)
