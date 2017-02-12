@@ -3,7 +3,6 @@
 from __future__ import print_function, division
 
 import os
-import json
 from io import BytesIO
 from hashlib import sha256
 from mutagen.id3._id3v1 import find_id3v1
