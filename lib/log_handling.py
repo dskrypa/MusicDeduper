@@ -208,10 +208,18 @@ class LogManager:
         """
         self.init_default_stream_logger(debug, verbose)
         if log_path is None:
-            try:
-                calling_module = os.path.splitext(os.path.basename(inspect.getsourcefile(inspect.stack()[1][0])))[0]
-            except TypeError:
-                calling_module = "{}_interactive".format(os.path.splitext(os.path.basename(_filename))[0])
+            this_file = os.path.splitext(os.path.basename(__file__))[0]
+            calling_module = this_file
+            i = 1
+            while calling_module == this_file:
+                try:
+                    calling_module = os.path.splitext(os.path.basename(inspect.getsourcefile(inspect.stack()[i][0])))[0]
+                except TypeError:
+                    calling_module = "{}_interactive".format(this_file)
+                except IndexError:
+                    break
+                i += 1
+
             log_path = "/var/tmp/{}_{}_{}.log".format(calling_module, getpass.getuser(), int(time.time()))
         file_fmt = "%(asctime)s %(levelname)s %(funcName)s:%(lineno)d %(message)s"
         self.add_handler(log_path, logging.DEBUG, file_fmt, rotate=True)

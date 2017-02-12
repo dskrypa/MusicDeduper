@@ -50,7 +50,7 @@ def getPaths(path):
     Recursively generates a list of absolute paths for every file discoverable
     via the given path.
     """
-    path = unicode(path[:-1] if (path[-1:] == "/") else path)
+    path = unicode(path[:-1] if (path[-1:] == os.sep) else path)
     paths = []
     if os.path.isdir(path):
         for sub in map(unicode, os.listdir(path)):

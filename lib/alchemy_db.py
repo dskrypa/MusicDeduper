@@ -16,7 +16,11 @@ from log_handling import LogManager
 
 
 class AlchemyDatabase:
-    def __init__(self, db_path=None, echo=False):
+    def __init__(self, db_path=None, echo=False, logger=None):
+        if logger is None:
+            self.logger, log_path = LogManager.create_default_logger()
+        else:
+            self.logger = logger
         self.db_path = os.path.expanduser(db_path if db_path is not None else ":memory:")
         if self.db_path != ":memory:":
             db_dir = os.path.dirname(self.db_path)
@@ -32,8 +36,6 @@ class AlchemyDatabase:
 
     def add_table(self, name, columns=None, pk=None):
         self._tables[name] = DBTable(self, name, columns, pk)
-        if name not in self.engine.table_names():
-            self.meta.create_all()
         return self._tables[name]
 
     def __getitem__(self, key):
@@ -90,12 +92,14 @@ class DBTable(object):
                 return json.dumps(row.as_dict())
 
         self.db = parent_db
+        self.logger = self.db.logger
         self.name = name
         self.rowType = DBRow
         self.session = self.db.session
         try:
             self.table = Table(self.name, self.db.meta, autoload=True)
         except NoSuchTableError as e:
+            self.logger.verbose("Creating table '{}' in {}".format(self.name, self.db.db_path))
             if columns is None:
                 raise e
             cols = OrderedDict()
@@ -121,6 +125,9 @@ class DBTable(object):
                 break
             c += 1
         assert self.pk is not None
+
+        if self.name not in self.db.engine.table_names():
+            self.db.meta.create_all()
 
     def select(self, **kwargs):
         return self.rows().filter_by(**kwargs)
