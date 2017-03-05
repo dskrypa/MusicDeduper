@@ -7,7 +7,7 @@ import json
 import logging
 import argparse
 
-from lib.common import InputValidationException, getFilteredPaths
+from lib.common import getFilteredPaths
 from lib.log_handling import LogManager, OutputManager
 from lib.alchemy_db import AlchemyDatabase, DBTable
 from lib.output_formatting import fTime, Printer, print_tiered
@@ -31,6 +31,7 @@ def main():
     parser2 = sparsers.add_parser("view", help="View current DB")
 
     for _parser in sparsers.choices.values() + [parser]:
+        _parser.add_argument("--path", "-p", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
         _parser.add_argument("--debug", "-d", action="store_true", default=False, help="Log additional debugging information (default: %(default)s)")
         _parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Log more verbose information (default: %(default)s)")
     args = parser.parse_args()
@@ -39,7 +40,7 @@ def main():
     logging.info("Logging to: {}".format(log_path))
 
     if args.action == "scan":
-        deduper = Deduper(lm)
+        deduper = Deduper(lm, args.path)
         deduper.scan(args.scan_dir)
     elif args.action == "view":
         p = Printer("table")
@@ -48,9 +49,9 @@ def main():
 
 
 class Deduper:
-    def __init__(self, log_manager):
+    def __init__(self, log_manager, db_path):
         self.lm = OutputManager(log_manager)
-        self.db = AlchemyDatabase(default_db_path, logger=self.lm)
+        self.db = AlchemyDatabase(db_path, logger=self.lm)
         self.music = DBTable(self.db, "music", zip(db_columns, db_types), "path")
         self.p = Printer("json-pretty")
 
@@ -81,6 +82,11 @@ class Deduper:
 
                     try:
                         info = mf.get_info()
+                    except Exception as e:
+                        pm.record_error("{}: {}".format(file_path, e))
+                        continue
+
+                    try:
                         row = {
                             "path": file_path, "modified": mf.modified, "size": mf.size,
                             "tags": json.dumps(mf.get_tag_dict()),

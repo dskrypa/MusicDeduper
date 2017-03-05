@@ -9,6 +9,8 @@ from mutagen.id3._id3v1 import find_id3v1
 from mutagen.mp3 import MP3, BitrateMode
 from mutagen.id3 import ID3
 
+# V1_Tags: {"TIT2":"title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
+
 
 class MusicFile:
     info_copy_keys = ["bitrate", "channels", "encoder_info", "length", "sample_rate", "sketchy"]
