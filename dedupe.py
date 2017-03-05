@@ -11,7 +11,7 @@ from lib.common import getFilteredPaths
 from lib.log_handling import LogManager, OutputManager
 from lib.alchemy_db import AlchemyDatabase, DBTable
 from lib.output_formatting import fTime, Printer, print_tiered
-from lib.mp3_handling import MusicFile, MusicFileOpenException, TagExtractionException
+from lib.mp3_handling import MusicFile, MusicFileOpenException
 
 
 default_db_path = "/var/tmp/music_deduper.db"
@@ -30,8 +30,8 @@ def main():
     parser1.add_argument("scan_dir", help="The directory to scan for music")
     parser2 = sparsers.add_parser("view", help="View current DB")
 
-    parser3 = sparsers.add_parser("cleanup", help="")
-    parser3.add_argument("scan_dir", help="The directory to scan for music")
+    parser3 = sparsers.add_parser("tagkeys", help="")
+    #parser3.add_argument("scan_dir", help="The directory to scan for music")
 
     for _parser in sparsers.choices.values() + [parser]:
         _parser.add_argument("--db_path", "-db", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
@@ -49,6 +49,12 @@ def main():
         p = Printer("table")
         db = AlchemyDatabase(args.db_path, logger=lm)
         p.pprint([row for row in db["music"].rows()], include_header=True, add_bar=True)
+    elif args.action == "tagkeys":
+        db = AlchemyDatabase(args.db_path, logger=lm)
+        for row in db["music"].rows():
+            for ver, tags in json.loads(row["tags"]).iteritems():
+                if ver.startswith("2"):
+                    print(row["path"], json.dumps(tags.keys()))
 
 
 class Deduper:
@@ -84,28 +90,12 @@ class Deduper:
 
                     try:
                         info = mf.info
-                    except Exception as e:
-                        pm.record_error("{}: {}".format(file_path, e))
-                        continue
-
-                    try:
                         row = {
                             "path": file_path, "modified": mf.modified, "size": mf.size,
                             "tags": json.dumps(mf.get_tag_dict()),
                             "sha256": mf.full_hash,
                             "audio_sha256": mf.audio_hash
                         }
-                    except TagExtractionException as e:
-                        pm.record_error("{}: Tag extraction error: {}".format(file_path, e))
-                        #pm.record_error("Error extracting tag information from {} [{}]: {}".format(file_path, info["info"], e))
-                        #pm.record_error("Error extracting tag information from {} [{}].  Tags:".format(file_path, info["info"]))
-                        #print_tiered(mf.get_tag_dict())
-                        #extracted_tags = dict(mf.tags)
-                        # for ver in extracted_tags:
-                        #     if "APIC:" in extracted_tags[ver]:
-                        #         extracted_tags[ver]["APIC:"] = str(extracted_tags[ver]["APIC:"])[:100]
-                        # print_tiered(extracted_tags)
-                        break
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))
                         continue

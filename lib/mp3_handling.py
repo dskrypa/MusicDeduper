@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function, division#, unicode_literals
+from __future__ import print_function, division, unicode_literals
 
 import os
 import logging
@@ -10,6 +10,7 @@ from mutagen.id3._id3v1 import find_id3v1
 from mutagen.mp3 import MP3, BitrateMode
 from mutagen.id3 import ID3
 from cached_property import cached_property
+from collections import defaultdict
 
 # V1_Tags: {"TIT2":"title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
 
@@ -72,57 +73,42 @@ class MusicFile:
 
     @cached_property
     def tags(self):
+        if self.mp3.tags.unknown_frames:
+            raise UnknownFrameException("Found unknown frames: {}".format(self.mp3.tags.unknown_frames))
+
         tags = {}
         if self.mp3.tags.version[0] == 2:
             v1_tags = self._get_v1_tags()[0]
             if v1_tags is not None:
                 tags["1.1"] = v1_tags
-        latest_dict = {}
-        for tag in self.mp3.tags:
-            tlist = self.mp3.tags.getall(tag)
-            latest_dict[tag] = tlist[0] if (len(tlist) == 1) else tlist
-        tags[".".join(map(str, self.mp3.tags.version))] = latest_dict
+
+        tag_dict = defaultdict(list)
+        for tid, frame in self.mp3.tags.iteritems():
+            if ":" in tid:                          #Unique IDs for frames that can occur more than once contain ":"
+                tag_dict[type(frame).__name__].append(frame)
+            else:
+                tag_dict[tid] = frame
+        tags[".".join(map(str, self.mp3.tags.version))] = tag_dict
         return tags
 
     def _get_v1_tags(self):
         return find_id3v1(self.content)
 
-    @classmethod
-    def extract_tag_value(cls, tag):
-        """
-        for class in `egrep '\(Frame\):' _frames.py | awk '{print $2}'`; do echo class $class; clazz=`echo $class | sed -r 's/([\\(\\)])/\\\\\1/g'`; sed -nr "/class $ clazz/,/class /p" _frames.py | head -n-1 | sed -nr '/_pprint/,/def /p'; done
-
-        :param tag:
-        :return:
-        """
-        try:
-            return tag._pprint()
-        except AttributeError:
-            raise TagExtractionException("No known extractable content", tag)
-
-        # if hasattr(tag, "text"):
-        #     text = tag.text
-        #     if not isinstance(text, list):
-        #         raise TagExtractionException("Unexpected text field content type ({})".format(type(text)), tag)
-        #     elif len(text) > 1:
-        #         raise TagExtractionException("Unexpected text field list length ({})".format(len(text)), tag)
-        #     return unicode(text[0])
-        # elif tag.FrameID == "APIC":
-        #     return "{} ({}, '{}')".format(tag.mime, tag.type, tag.desc)
-        # elif hasattr(tag, "_pprint"):
-        #     raise TagExtractionException("Check {}._pprint()".format(type(tag).__name__, None), tag)
-        #     #return tag._pprint()
-        # raise TagExtractionException("No known extractable content", tag)
-
     def get_tag_dict(self):
+        """
+        Generates a dict of tag IDs and representations of their values, based on the tag's _pprint() method (the non-
+        private version returns the ID as well)
+
+        :return dict: mapping of id3_version:dict(frame_id:value(s))
+        """
         tag_dict = {}
         for ver, tags in self.tags.iteritems():
             tag_dict[ver] = {}
             for key, value in tags.iteritems():
                 if isinstance(value, list):
-                    tag_dict[ver][key] = [self.extract_tag_value(val) for val in value]
+                    tag_dict[ver][key] = [val._pprint() for val in value]
                 else:
-                    tag_dict[ver][key] = self.extract_tag_value(value)
+                    tag_dict[ver][key] = value._pprint()
         return tag_dict
 
     @classmethod
@@ -130,9 +116,6 @@ class MusicFile:
         m, s = divmod(abs(int(round(seconds))), 60)
         h, m = divmod(m, 60)
         return "{}{:02d}:{:02d}".format("{:02d}:".format(h) if h > 0 else "", m, s)
-
-    def get_summary(self):
-        return {"info": self.info, "tags": self.tags}
 
     def save_tags(self, keep_v1=True, v2_version=3):
         """
@@ -163,11 +146,5 @@ class MusicFileOpenException(Exception):
     pass
 
 
-class TagExtractionException(Exception):
-    def __init__(self, msg, tag, *args, **kwargs):
-        self.tag = tag
-        tag_repr = unicode(tag)
-        if self.tag.FrameID == "APIC":
-            tag_repr = "{} ({}, '{}')".format(self.tag.mime, self.tag.type, self.tag.desc)
-        msg = "[{}] {} for tag: {}".format(self.tag.FrameID, msg, tag_repr)
-        super(TagExtractionException, self).__init__(msg, *args, **kwargs)
+class UnknownFrameException(Exception):
+    pass
