@@ -6,6 +6,7 @@ import time
 import json
 import logging
 import argparse
+from collections import OrderedDict, defaultdict
 
 from lib.common import getFilteredPaths
 from lib.log_handling import LogManager, OutputManager
@@ -13,13 +14,17 @@ from lib.alchemy_db import AlchemyDatabase, DBTable
 from lib.output_formatting import fTime, Printer, print_tiered
 from lib.mp3_handling import MusicFile, MusicFileOpenException
 
+"""
+Notes:
+- sketchy just indicates possibly invalid MPEG audio
+"""
 
 default_db_path = "/var/tmp/music_deduper.db"
 
 info_columns = ["bitrate", "bitrate_kbps", "bitrate_mode", "channels", "encoder_info", "length", "sample_rate", "sketchy", "time"]
 info_types = ["INT", "INT", "TEXT", "INT", "TEXT", "FLOAT", "INT", "BOOLEAN", "TEXT"]
-db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + info_columns
-db_types = ["TEXT", "INT", "INT", "TEXT", "TEXT", "TEXT"] + info_types
+db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + info_columns + ["v1", "v2", "tag_mismatches"]
+db_types = ["TEXT", "INT", "INT", "TEXT", "TEXT", "TEXT"] + info_types + ["TEXT", "TEXT", "TEXT"]
 
 
 def main():
@@ -32,6 +37,10 @@ def main():
 
     parser3 = sparsers.add_parser("tagkeys", help="")
     #parser3.add_argument("scan_dir", help="The directory to scan for music")
+
+    parser4 = sparsers.add_parser("report", help="")
+    parser4.add_argument("report_name", choices=("mismatch", "unique", "dupes", "sketchy"), help="Name of report to run")
+    parser4.add_argument("--analysis_mode", "-am", choices=("audio", "full"), default="full", help="")
 
     for _parser in sparsers.choices.values() + [parser]:
         _parser.add_argument("--db_path", "-db", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
@@ -55,6 +64,9 @@ def main():
             for ver, tags in json.loads(row["tags"]).iteritems():
                 if ver.startswith("2"):
                     print(row["path"], json.dumps(tags.keys()))
+    elif args.action == "report":
+        deduper = Deduper(lm, args.db_path)
+        deduper.report(args.report_name, analysis_mode=args.analysis_mode)
 
 
 class Deduper:
@@ -63,6 +75,50 @@ class Deduper:
         self.db = AlchemyDatabase(db_path, logger=self.lm)
         self.music = DBTable(self.db, "music", zip(db_columns, db_types), "path")
         self.p = Printer("json-pretty")
+
+    def report(self, report_name, *args, **kwargs):
+        p = Printer("table")
+        if report_name == "mismatch":
+            cols = ["path", "tag", "v1", "v2", "v1_val", "v2_val"]
+            report_rows = []
+            for row in self.music:
+                mismatches = json.loads(row["tag_mismatches"])
+                if mismatches:
+                    tags = json.loads(row["tags"])
+                    v1, v2 = row["v1"], row["v2"]
+                    for tid in mismatches:
+                        report_row = {
+                            "path": row["path"], "tag": tid, "v1": v1, "v2": v2,
+                            "v1_val": tags[v1].get(tid, None), "v2_val": tags[v2].get(tid, None)
+                        }
+                        report_rows.append(OrderedDict([(k, report_row[k]) for k in cols]))
+            p.pprint(report_rows, include_header=True, add_bar=True)
+        elif report_name == "unique":
+            for rows in self.analyze(*args, **kwargs).itervalues():
+                if len(rows) == 1:
+                    print(rows[0]["path"])
+        elif report_name == "dupes":
+            for sha256, rows in self.analyze(*args, **kwargs).iteritems():
+                if len(rows) != 1:
+                    print(sha256)
+                    for row in rows:
+                        print("\t" + row["path"])
+        elif report_name == "sketchy":
+            sketchy = [row for row in self.music if row["sketchy"]]
+            if len(sketchy) > 0:
+                p.pprint(sketchy, include_header=True, add_bar=True)
+            else:
+                print("Nothing sketchy!")
+
+    def analyze(self, analysis_mode):
+        if analysis_mode not in ("full", "audio"):
+            raise ValueError("mode can be full or audio, not {}".format(analysis_mode))
+
+        hashkey = "sha256" if analysis_mode == "full" else "audio_sha256"
+        analyzed = defaultdict(list)
+        for row in self.music:
+            analyzed[row[hashkey]].append(row)
+        return analyzed
 
     def scan(self, scan_dir):
         paths = getFilteredPaths(scan_dir, "mp3")
@@ -93,8 +149,8 @@ class Deduper:
                         row = {
                             "path": file_path, "modified": mf.modified, "size": mf.size,
                             "tags": json.dumps(mf.get_tag_dict()),
-                            "sha256": mf.full_hash,
-                            "audio_sha256": mf.audio_hash
+                            "sha256": mf.full_hash, "audio_sha256": mf.audio_hash,
+                            "v1": mf.v1_ver, "v2": mf.v2_ver, "tag_mismatches": json.dumps(mf.get_mismatch_keys())
                         }
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))

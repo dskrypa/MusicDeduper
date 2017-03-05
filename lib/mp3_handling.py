@@ -22,6 +22,8 @@ class MusicFile:
     def __init__(self, file_path):
         self.file_path = file_path
         self.tags_modified = False
+        self.v1_ver = None
+        self.v2_ver = None
         try:
             stat = os.stat(self.file_path)
         except Exception as e:
@@ -81,6 +83,7 @@ class MusicFile:
             v1_tags = self._get_v1_tags()[0]
             if v1_tags is not None:
                 tags["1.1"] = v1_tags
+                self.v1_ver = "1.1"
 
         tag_dict = defaultdict(list)
         for tid, frame in self.mp3.tags.iteritems():
@@ -88,16 +91,28 @@ class MusicFile:
                 tag_dict[type(frame).__name__].append(frame)
             else:
                 tag_dict[tid] = frame
-        tags[".".join(map(str, self.mp3.tags.version))] = tag_dict
+        tag_ver = ".".join(map(str, self.mp3.tags.version))
+        tags[tag_ver] = tag_dict
+        setattr(self, "v{}_ver".format(self.mp3.tags.version[0]), tag_ver)
         return tags
 
     def _get_v1_tags(self):
         return find_id3v1(self.content)
 
+    @classmethod
+    def tag_val(cls, frame):
+        if type(frame).__name__ == "COMM":
+            return frame.text
+        else:
+            return frame._pprint()
+
     def get_tag_dict(self):
         """
         Generates a dict of tag IDs and representations of their values, based on the tag's _pprint() method (the non-
         private version returns the ID as well)
+
+        View _pprint methods:
+        for class in `egrep '\(Frame\):' _frames.py | awk '{print $2}'`; do echo class $class; clazz=`echo $class | sed -r 's/([\\(\\)])/\\\\\1/g'`; sed -nr "/class $clazz/,/class /p" _frames.py | head -n-1 | sed -nr '/_pprint/,/def /p'; done
 
         :return dict: mapping of id3_version:dict(frame_id:value(s))
         """
@@ -106,10 +121,24 @@ class MusicFile:
             tag_dict[ver] = {}
             for key, value in tags.iteritems():
                 if isinstance(value, list):
-                    tag_dict[ver][key] = [val._pprint() for val in value]
+                    if len(value) == 1:
+                        tag_dict[ver][key] = self.tag_val(value[0])
+                    else:
+                        tag_dict[ver][key] = [self.tag_val(val) for val in value]
                 else:
-                    tag_dict[ver][key] = value._pprint()
+                    tag_dict[ver][key] = self.tag_val(value)
         return tag_dict
+
+    def get_mismatch_keys(self):
+        if (self.v1_ver is None) or (self.v2_ver is None):
+            return []
+        mismatches = []
+        tag_dict = self.get_tag_dict()
+        for tid, v1_val in tag_dict[self.v1_ver].iteritems():
+            v2_val = tag_dict[self.v2_ver].get(tid, None)
+            if (v2_val != v1_val) and (not isinstance(v2_val, unicode) or not v2_val.startswith(v1_val)):
+                mismatches.append(tid)
+        return mismatches
 
     @classmethod
     def _ftime(cls, seconds):

@@ -187,13 +187,13 @@ class OutputColumn:
     def __init__(self, title, width, display=False, align="", ftype=""):
         self.title = title
         if isinstance(width, (dict, list, set)):
-            self.width = max(len(str(obj)) for obj in width)
+            self.width = max(len(unicode(obj)) for obj in width)
         elif isinstance(width, tuple):
             i, k = width
             if isinstance(i, dict):
-                self.width = max(len(str(e[k])) for e in i.itervalues())
+                self.width = max(len(unicode(e[k])) for e in i.itervalues())
             elif isinstance(i, list):
-                self.width = max(len(str(e[k])) for e in i)
+                self.width = max(len(unicode(e[k])) for e in i)
             else:
                 raise InputValidationException("Invalid input type: {}".format(type(i)))
         else:
