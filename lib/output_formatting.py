@@ -85,22 +85,27 @@ def format_tiered(obj):
             sub_objs = format_tiered(obj[k])
             for i in range(len(sub_objs)):
                 if i == 0:
-                    lines.append("{}:  {}".format(fk, sub_objs[i]))
+                    try:
+                        lines.append(u"{}:  {}".format(fk, sub_objs[i]))
+                    except UnicodeDecodeError as e:
+                        err_print(e)
+                        err_print(fk)
+                        err_print(sub_objs[i])
                 else:
-                    lines.append("{}   {}".format(pad, sub_objs[i]))
+                    lines.append(u"{}   {}".format(pad, sub_objs[i]))
     elif isinstance(obj, list):
         if len(obj) < 1:
             return format_tiered("[]")
         kw = len(str(len(obj)))
         pad = " " * kw
-        fmt = "[{{:>{}}}]:  {{}}".format(kw)
+        fmt = u"[{{:>{}}}]:  {{}}".format(kw)
         for i in range(len(obj)):
             sub_objs = format_tiered(obj[i])
             for j in range(len(sub_objs)):
                 if j == 0:
                     lines.append(fmt.format(i, sub_objs[j]))
                 else:
-                    lines.append(" {}    {}".format(pad, sub_objs[j]))
+                    lines.append(u" {}    {}".format(pad, sub_objs[j]))
     else:
         try:
             lines.append(str(obj))

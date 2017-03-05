@@ -132,9 +132,9 @@ class ProgressMonitor:
     def __exit__(self, *args, **kwargs):
         fmt = "{{}}   {{:{}d}} ({{:.2%}})".format(self.tl)
         self.lm.printf("Done!", end=True, append=False)
-        self.lm.printf("Processed: {:d}", self.total, end=True, append=False)
-        self.lm.printf(fmt, "Skipped:", self.skipped, self.skipped / self.total, end=True, append=False)
-        self.lm.printf(fmt, "Errors: ", self.errors, self.errors / self.total, end=True, append=False)
+        self.lm.printf("Processed: {:d}", self.c, end=True, append=False)
+        self.lm.printf(fmt, "Skipped:", self.skipped, self.skipped / self.c, end=True, append=False)
+        self.lm.printf(fmt, "Errors: ", self.errors, self.errors / self.c, end=True, append=False)
         self.lm.printf("Runtime: {}", self.elapsedf(), end=True, append=False)
 
     def incr(self):

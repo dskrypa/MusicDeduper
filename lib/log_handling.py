@@ -105,7 +105,7 @@ class LogManager:
         return CustomLogFormatter
 
     @classmethod
-    def _prep_log_dir(cls, log_path, new_dir_permissions=0o1666):
+    def _prep_log_dir(cls, log_path, new_dir_permissions=0o1777):
         """
         Creates any necessary intermediate directories in order for the given log path to be valid
         :param log_path: Log file destination
