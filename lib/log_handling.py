@@ -1,9 +1,8 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
 import os
-import sys
 import time
 import inspect
 import getpass
@@ -34,6 +33,7 @@ class LogManager:
         self.logger.setLevel(logging.NOTSET)    #Default is 30 / WARNING
         self.defaults = {"entry_format": entry_fmt, "date_format": date_fmt}
         self.log_funcs = {}
+        self.stdout_lvl = logging.INFO
         for fn in ("debug", "info", "warning", "error", "critical", "exception", "log"):
             setattr(self, fn, getattr(self.logger, fn))
             self.log_funcs[fn] = getattr(self, fn)
@@ -191,10 +191,10 @@ class LogManager:
         """
         stderr_filter = self.create_filter(lambda lvl: lvl >= logging.WARNING)
         stdout_filter = self.create_filter(lambda lvl: lvl < logging.WARNING)
-        stdout_lvl = logging.getLevelName("VERBOSE") if verbose else logging.INFO
-        stdout_lvl = logging.DEBUG if debug else stdout_lvl
+        self.stdout_lvl = logging.getLevelName("VERBOSE") if verbose else logging.INFO
+        self.stdout_lvl = logging.DEBUG if debug else self.stdout_lvl
         red_formatter = self.create_formatter(lambda rec: getattr(rec, "red", False), lambda msg: colored(msg, "red"))
-        self.add_handler(_uout, stdout_lvl, filter=stdout_filter)
+        self.add_handler(_uout, self.stdout_lvl, filter=stdout_filter)
         self.add_handler(_uerr, fmt="%(levelname)s %(message)s", filter=stderr_filter, formatter=red_formatter)
 
     def init_default_logger(self, debug=False, verbose=False, log_path=None):
@@ -238,9 +238,11 @@ class OutputManager:
 
     def _add_log_func(self, fn_name):
         fn = getattr(self.lm, fn_name)
+        lvl = logging.getLevelName(fn_name.upper())
         def _log(msg, *args, **kwargs):
             fn(self.fmt(msg, True, True), *args, **kwargs)
-            self.need_newline = False
+            if self.lm.stdout_lvl <= lvl:
+                self.need_newline = False
         setattr(self, fn_name, _log)
 
     def fmt(self, msg, end, log=False, append=False, color=None):
