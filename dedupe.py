@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 import time
 import json
@@ -30,8 +30,11 @@ def main():
     parser1.add_argument("scan_dir", help="The directory to scan for music")
     parser2 = sparsers.add_parser("view", help="View current DB")
 
+    parser3 = sparsers.add_parser("cleanup", help="")
+    parser3.add_argument("scan_dir", help="The directory to scan for music")
+
     for _parser in sparsers.choices.values() + [parser]:
-        _parser.add_argument("--path", "-p", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
+        _parser.add_argument("--db_path", "-db", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
         _parser.add_argument("--debug", "-d", action="store_true", default=False, help="Log additional debugging information (default: %(default)s)")
         _parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Log more verbose information (default: %(default)s)")
     args = parser.parse_args()
@@ -40,11 +43,11 @@ def main():
     logging.info("Logging to: {}".format(log_path))
 
     if args.action == "scan":
-        deduper = Deduper(lm, args.path)
+        deduper = Deduper(lm, args.db_path)
         deduper.scan(args.scan_dir)
     elif args.action == "view":
         p = Printer("table")
-        db = AlchemyDatabase(default_db_path, logger=lm)
+        db = AlchemyDatabase(args.db_path, logger=lm)
         p.pprint([row for row in db["music"].rows()], include_header=True, add_bar=True)
 
 
@@ -69,19 +72,18 @@ class Deduper:
 
                     if file_path in self.music:
                         db_file = self.music[file_path]
-                        last_modified_changed = (db_file["modified"] != mf.modified)
+                        modified_changed = (db_file["modified"] != mf.modified)
                         size_changed = (db_file["size"] != mf.size)
-                        if not (last_modified_changed or size_changed):
+                        if not (modified_changed or size_changed):
                             pm.record_skip("Skipping", file_path, "(already in db)")
                             continue
-                        why = "file updated" if last_modified_changed else ""
-                        if size_changed:
-                            why += " and " if (len(why) != 0) else ""
-                            why += "size changed"
+
+                        why = ["file updated" if modified_changed else None, "size changed" if size_changed else None]
+                        why = " and ".join([reason for reason in why if reason is not None])
                         pm.record_message("Updating", file_path, "({})".format(why))
 
                     try:
-                        info = mf.get_info()
+                        info = mf.info
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))
                         continue
@@ -90,12 +92,19 @@ class Deduper:
                         row = {
                             "path": file_path, "modified": mf.modified, "size": mf.size,
                             "tags": json.dumps(mf.get_tag_dict()),
-                            "sha256": mf.get_full_hash(),
-                            "audio_sha256": mf.get_audio_hash()
+                            "sha256": mf.full_hash,
+                            "audio_sha256": mf.audio_hash
                         }
                     except TagExtractionException as e:
-                        pm.record_error("Error extracting tag information from {} [{}].  Tags:".format(file_path, info["info"]))
-                        print_tiered(mf.get_tags())
+                        pm.record_error("{}: Tag extraction error: {}".format(file_path, e))
+                        #pm.record_error("Error extracting tag information from {} [{}]: {}".format(file_path, info["info"], e))
+                        #pm.record_error("Error extracting tag information from {} [{}].  Tags:".format(file_path, info["info"]))
+                        #print_tiered(mf.get_tag_dict())
+                        #extracted_tags = dict(mf.tags)
+                        # for ver in extracted_tags:
+                        #     if "APIC:" in extracted_tags[ver]:
+                        #         extracted_tags[ver]["APIC:"] = str(extracted_tags[ver]["APIC:"])[:100]
+                        # print_tiered(extracted_tags)
                         break
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))

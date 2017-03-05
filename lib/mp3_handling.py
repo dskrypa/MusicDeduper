@@ -1,13 +1,15 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function, division
+from __future__ import print_function, division#, unicode_literals
 
 import os
+import logging
 from io import BytesIO
 from hashlib import sha256
 from mutagen.id3._id3v1 import find_id3v1
 from mutagen.mp3 import MP3, BitrateMode
 from mutagen.id3 import ID3
+from cached_property import cached_property
 
 # V1_Tags: {"TIT2":"title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
 
@@ -18,12 +20,7 @@ class MusicFile:
 
     def __init__(self, file_path):
         self.file_path = file_path
-        self.content = None
-        self.mp3 = None
-        self.tags = None
-        self.audio_hash = None
-        self.full_hash = None
-        self.info = None
+        self.tags_modified = False
         try:
             stat = os.stat(self.file_path)
         except Exception as e:
@@ -32,54 +29,94 @@ class MusicFile:
             self.size = int(stat.st_size)
             self.modified = int(stat.st_mtime)
 
-    def get_content(self):
-        if self.content is None:
-            with open(self.file_path, "rb") as mfile:
-                self.content = BytesIO(mfile.read())
-        return self.content
+    @cached_property
+    def content(self):
+        with open(self.file_path, "rb") as mfile:
+            return BytesIO(mfile.read())
 
-    @classmethod
-    def ftime(cls, seconds):
-        m, s = divmod(abs(int(round(seconds))), 60)
-        h, m = divmod(m, 60)
-        return "{}{:02d}:{:02d}".format("{:02d}:".format(h) if h > 0 else "", m, s)
+    @cached_property
+    def mp3(self):
+        return MP3(self.content)
 
-    def get_summary(self):
-        return {"info": self.get_info(), "tags": self.get_tags()}
+    @cached_property
+    def id3_versions(self):
+        return tuple(self.tags.keys())
 
-    def get_mp3(self):
-        if self.mp3 is None:
-            self.mp3 = MP3(self.get_content())
-        return self.mp3
+    @cached_property
+    def audio_hash(self):
+        self.content.seek(0)
+        content = BytesIO(self.content.read())
+        ID3().delete(content)
+        content.seek(0)
+        return sha256(content.read()).hexdigest()
 
-    def get_info(self):
-        if self.info is None:
-            raw_info = self.get_mp3().info
-            info = {key: getattr(raw_info, key) for key in self.info_copy_keys}
-            info["bitrate_kbps"] = raw_info.bitrate // 1000
-            info["bitrate_mode"] = self.bitrate_modes[raw_info.bitrate_mode.real]
-            info["bitrate_readable"] = "{} kbps {}".format(info["bitrate_kbps"], info["bitrate_mode"])
-            info["time"] = self.ftime(raw_info.length)
-            info["info"] = "{time} @ {bitrate_readable}, {sample_rate} Hz [{channels} channels, encoded by {encoder_info}]".format(**info)
-            self.info = info
-        return self.info
+    @cached_property
+    def full_hash(self):
+        self.content.seek(0)
+        return sha256(self.content.read()).hexdigest()
+
+    @cached_property
+    def true_file(self):
+        return ID3(self.file_path)
+
+    @cached_property
+    def info(self):
+        raw_info = self.mp3.info
+        info = {key: getattr(raw_info, key) for key in self.info_copy_keys}
+        info["bitrate_kbps"] = raw_info.bitrate // 1000
+        info["bitrate_mode"] = self.bitrate_modes[raw_info.bitrate_mode.real]
+        info["bitrate_readable"] = "{} kbps {}".format(info["bitrate_kbps"], info["bitrate_mode"])
+        info["time"] = self._ftime(raw_info.length)
+        info["info"] = "{time} @ {bitrate_readable}, {sample_rate} Hz [{channels} channels, encoded by {encoder_info}]".format(**info)
+        return info
+
+    @cached_property
+    def tags(self):
+        tags = {}
+        if self.mp3.tags.version[0] == 2:
+            v1_tags = self._get_v1_tags()[0]
+            if v1_tags is not None:
+                tags["1.1"] = v1_tags
+        latest_dict = {}
+        for tag in self.mp3.tags:
+            tlist = self.mp3.tags.getall(tag)
+            latest_dict[tag] = tlist[0] if (len(tlist) == 1) else tlist
+        tags[".".join(map(str, self.mp3.tags.version))] = latest_dict
+        return tags
+
+    def _get_v1_tags(self):
+        return find_id3v1(self.content)
 
     @classmethod
     def extract_tag_value(cls, tag):
-        if hasattr(tag, "text"):
-            text = tag.text
-            if not isinstance(text, list):
-                raise TagExtractionException("Unexpected text field content type ({}) for tag: {{}}".format(type(text)), tag)
-            elif len(text) > 1:
-                raise TagExtractionException("Unexpected text field list length ({}) for tag: {{}}".format(len(text)), tag)
-            return unicode(text[0])
-        elif type(tag).__name__ == "APIC":
-            return "{} ({}, '{}')".format(tag.mime, tag.type, tag.desc)
-        raise TagExtractionException("No known extractable content for tag: {}", tag)
+        """
+        for class in `egrep '\(Frame\):' _frames.py | awk '{print $2}'`; do echo class $class; clazz=`echo $class | sed -r 's/([\\(\\)])/\\\\\1/g'`; sed -nr "/class $ clazz/,/class /p" _frames.py | head -n-1 | sed -nr '/_pprint/,/def /p'; done
+
+        :param tag:
+        :return:
+        """
+        try:
+            return tag._pprint()
+        except AttributeError:
+            raise TagExtractionException("No known extractable content", tag)
+
+        # if hasattr(tag, "text"):
+        #     text = tag.text
+        #     if not isinstance(text, list):
+        #         raise TagExtractionException("Unexpected text field content type ({})".format(type(text)), tag)
+        #     elif len(text) > 1:
+        #         raise TagExtractionException("Unexpected text field list length ({})".format(len(text)), tag)
+        #     return unicode(text[0])
+        # elif tag.FrameID == "APIC":
+        #     return "{} ({}, '{}')".format(tag.mime, tag.type, tag.desc)
+        # elif hasattr(tag, "_pprint"):
+        #     raise TagExtractionException("Check {}._pprint()".format(type(tag).__name__, None), tag)
+        #     #return tag._pprint()
+        # raise TagExtractionException("No known extractable content", tag)
 
     def get_tag_dict(self):
         tag_dict = {}
-        for ver, tags in self.get_tags().iteritems():
+        for ver, tags in self.tags.iteritems():
             tag_dict[ver] = {}
             for key, value in tags.iteritems():
                 if isinstance(value, list):
@@ -88,41 +125,38 @@ class MusicFile:
                     tag_dict[ver][key] = self.extract_tag_value(value)
         return tag_dict
 
-    def get_tags(self):
-        if self.tags is None:
-            mp3 = self.get_mp3()
-            tags = {}
-            if mp3.tags.version[0] == 2:
-                v1_tags = self._get_v1_tags()[0]
-                if v1_tags is not None:
-                    tags["1.1"] = v1_tags
-            latest_dict = {}
-            for tag in mp3.tags:
-                tlist = mp3.tags.getall(tag)
-                latest_dict[tag] = tlist[0] if (len(tlist) == 1) else tlist
-            tags[".".join(map(str, mp3.tags.version))] = latest_dict
-            self.tags = tags
-        return self.tags
+    @classmethod
+    def _ftime(cls, seconds):
+        m, s = divmod(abs(int(round(seconds))), 60)
+        h, m = divmod(m, 60)
+        return "{}{:02d}:{:02d}".format("{:02d}:".format(h) if h > 0 else "", m, s)
 
-    def _get_v1_tags(self):
-        return find_id3v1(self.get_content())
+    def get_summary(self):
+        return {"info": self.info, "tags": self.tags}
 
-    def get_audio_hash(self):
-        if self.audio_hash is None:
-            self.get_content()
-            self.content.seek(0)
-            content = BytesIO(self.content.read())
-            ID3().delete(content)
-            content.seek(0)
-            self.audio_hash = sha256(content.read()).hexdigest()
-        return self.audio_hash
+    def save_tags(self, keep_v1=True, v2_version=3):
+        """
 
-    def get_full_hash(self):
-        if self.full_hash is None:
-            self.get_content()
-            self.content.seek(0)
-            self.full_hash = sha256(self.content.read()).hexdigest()
-        return self.full_hash
+        :param keep_v1:
+        :param v2_version:
+        :return:
+        """
+        if v2_version not in (3, 4):
+            raise ValueError("v2_version must be 3 or 4, not {}".format(v2_version))
+        do_save = self.tags_modified
+        id3_versions = self.get_id3_versions()
+
+        if (v2_version == 3) and ("2.3.0" not in id3_versions):
+            do_save = True
+            self.true_file.update_to_v23()
+        elif keep_v1 and ("1.1" not in id3_versions):
+            do_save = True
+
+        if do_save:
+            logging.debug("Saving changes to {}".format(self.file_path))
+            self.true_file.save(v1=1 if keep_v1 else 0, v2=v2_version)
+        else:
+            logging.debug("Not changed: {}".format(self.file_path))
 
 
 class MusicFileOpenException(Exception):
@@ -132,4 +166,8 @@ class MusicFileOpenException(Exception):
 class TagExtractionException(Exception):
     def __init__(self, msg, tag, *args, **kwargs):
         self.tag = tag
-        super(TagExtractionException, self).__init__(msg.format(tag[:150]), *args, **kwargs)
+        tag_repr = unicode(tag)
+        if self.tag.FrameID == "APIC":
+            tag_repr = "{} ({}, '{}')".format(self.tag.mime, self.tag.type, self.tag.desc)
+        msg = "[{}] {} for tag: {}".format(self.tag.FrameID, msg, tag_repr)
+        super(TagExtractionException, self).__init__(msg, *args, **kwargs)
