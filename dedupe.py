@@ -6,12 +6,12 @@ import time
 import json
 import logging
 import argparse
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, Counter
 
 from lib.common import getFilteredPaths
 from lib.log_handling import LogManager, OutputManager
 from lib.alchemy_db import AlchemyDatabase, DBTable
-from lib.output_formatting import fTime, Printer, print_tiered
+from lib.output_formatting import fTime, Printer, format_percent, format_output, OutputTable, OutputColumn
 from lib.mp3_handling import MusicFile, MusicFileOpenException
 
 """
@@ -34,12 +34,13 @@ def main():
     parser1 = sparsers.add_parser("scan", help="Scan the given directory")
     parser1.add_argument("scan_dir", help="The directory to scan for music")
     parser2 = sparsers.add_parser("view", help="View current DB")
+    parser2.add_argument("--tags", "-t", nargs="+", help="Only include MP3s with the given tags")
 
     parser3 = sparsers.add_parser("tagkeys", help="")
     #parser3.add_argument("scan_dir", help="The directory to scan for music")
 
     parser4 = sparsers.add_parser("report", help="")
-    parser4.add_argument("report_name", choices=("mismatch", "unique", "dupes", "sketchy"), help="Name of report to run")
+    parser4.add_argument("report_name", choices=("mismatch", "unique", "dupes", "sketchy", "tag_popularity"), help="Name of report to run")
     parser4.add_argument("--analysis_mode", "-am", choices=("audio", "full"), default="full", help="")
 
     for _parser in sparsers.choices.values() + [parser]:
@@ -55,9 +56,8 @@ def main():
         deduper = Deduper(lm, args.db_path)
         deduper.scan(args.scan_dir)
     elif args.action == "view":
-        p = Printer("table")
-        db = AlchemyDatabase(args.db_path, logger=lm)
-        p.pprint([row for row in db["music"].rows()], include_header=True, add_bar=True)
+        deduper = Deduper(lm, args.db_path)
+        deduper.view(args.tags)
     elif args.action == "tagkeys":
         db = AlchemyDatabase(args.db_path, logger=lm)
         for row in db["music"].rows():
@@ -75,6 +75,30 @@ class Deduper:
         self.db = AlchemyDatabase(db_path, logger=self.lm)
         self.music = DBTable(self.db, "music", zip(db_columns, db_types), "path")
         self.p = Printer("json-pretty")
+
+    def view(self, with_tags=None):
+        p = Printer("table")
+        if with_tags is None:
+            p.pprint([row for row in self.music], include_header=True, add_bar=True)
+        else:
+            rows = []
+            for row in self.music:
+                orow = {}
+                tags = json.loads(row["tags"])
+                v1, v2 = row["v1"], row["v2"]
+
+                for tid in with_tags:
+                    orow[tid] = tags.get(v2, {}).get(tid, None)
+                if reduce(lambda a, b: a or b, orow.values()):
+                    orow["path"] = row["path"]
+                    rows.append(orow)
+
+            cols = [("path", OutputColumn("Path", (rows, "path"), True))]
+            for tid in with_tags:
+                cols.append((tid, OutputColumn(tid, (rows, tid), True)))
+            tbl = OutputTable(cols)
+            tbl.print_header(True)
+            tbl.print_rows(rows)
 
     def report(self, report_name, *args, **kwargs):
         p = Printer("table")
@@ -109,6 +133,27 @@ class Deduper:
                 p.pprint(sketchy, include_header=True, add_bar=True)
             else:
                 print("Nothing sketchy!")
+        elif report_name == "tag_popularity":
+            count = 0
+            all_tags = Counter()
+            for row in self.music:
+                count += 1
+                tags = json.loads(row["tags"])
+                if row["v2"] is not None:
+                    vtags = tags[row["v2"]]
+                elif row["v1"] is not None:
+                    vtags = tags[row["v1"]]
+                else:
+                    continue
+                all_tags.update(vtags.keys())
+
+            print("Rows: {}".format(count))
+            report = []
+            cols = ["tag", "count", "percent"]
+            for key in sorted(all_tags.keys()):
+                row = {"tag": key, "count": all_tags[key], "percent": format_output(format_percent(all_tags[key], count), False, None, 6, "r")}
+                report.append(OrderedDict([(k, row[k]) for k in cols]))
+            p.pprint(report, include_header=True, add_bar=True)
 
     def analyze(self, analysis_mode):
         if analysis_mode not in ("full", "audio"):

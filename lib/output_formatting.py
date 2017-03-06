@@ -1,5 +1,5 @@
 
-from __future__ import print_function, unicode_literals
+from __future__ import print_function, division, unicode_literals
 
 import sys
 import math
@@ -68,7 +68,7 @@ def format_output(text, should_color, color_str, width=None, justify=None):
 
     
 def format_percent(num, div):
-    return "{:,.2%}".format(num, div) if div > 0 else "--.--%"
+    return "{:,.2%}".format(num / div) if div > 0 else "--.--%"
     
 
 def format_tiered(obj):
