@@ -11,6 +11,7 @@ open = codecs.open
 str = unicode
 
 _badpath = re.compile(u'[\u0000-\u001F\u007F-\u009F/$!@#<>"\'|:*%?\\\\]', re.U)
+invalid_path_rx = re.compile(u'[\u0000-\u001F\u007F-\u009F/$!@#<>"|:*%?\\\\]', re.U)
 
 
 class InputValidationException(Exception):
@@ -86,10 +87,26 @@ def getUnusedPath(rpath, fname, ext=None):
     return fpath
 
 
-def cleanup(strng):
+def cleanup(val):
     """Returns a string that is usable in a file name, else None"""
-    if (strng is None) or (len(strng) < 1):
+    if not val:
         return None
-    pass1 = _badpath.sub("", strng)
-    pass2 = re.sub("\s+", " ", pass1).strip()   #Condense multiple spaces into a single space
-    return pass2 if (len(pass2) > 0) else None
+    elif isinstance(val, (str, unicode)):
+        pass1 = _badpath.sub("", val)
+        pass2 = re.sub("\s+", " ", pass1).strip()   #Condense multiple spaces into a single space
+        return pass2 if (len(pass2) > 0) else None
+
+
+def path_usable_str(val, nospace=False, lower=False):
+    if not val:
+        raise ValueError("Unusable in a file path")
+    elif isinstance(val, (str, unicode)):
+        newval = invalid_path_rx.sub("", val)
+        newval = re.sub("\s+", " ", newval).strip()
+        if lower:
+            newval = newval.lower()
+        if nospace:
+            newval = newval.replace(" ", "")
+        if newval:
+            return newval
+    raise ValueError("Unusable in a file path")

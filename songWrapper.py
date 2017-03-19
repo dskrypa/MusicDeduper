@@ -10,8 +10,8 @@ from __future__ import division
 #from django.utils import text as dtext
 import re
 import eyed3_79 as eyed3
-from common import *
-from _constants import *
+from lib.common import *
+from lib._constants import *
 
 compIndicatorsA = {"soundtrack":True,"variousartists":True}
 compIndicatorsB = ["billboard","now thats what i call music","power trakks"]

@@ -18,16 +18,31 @@ _filename = __file__
 
 
 class LogManager:
+    _default_instance = None
+    _instances = {}
+
+    @classmethod
+    def get_instance(cls, name=None, *args, **kwargs):
+        if name is None:
+            if cls._default_instance is None:
+                cls.create_default_stream_logger(*args, **kwargs)
+            return cls._default_instance
+        else:
+            if name not in cls._instances:
+                cls.create_default_stream_logger(name=name, *args, **kwargs)
+            return cls._instances[name]
+
     """
     Convenience class to manage the settings that I use most frequently for logging in Python
     """
     def __init__(self, name=None, entry_fmt=None, date_fmt=None, replace_handlers=True):
+        self.name = name
         entry_fmt = entry_fmt if entry_fmt is not None else "%(message)s"
         date_fmt = date_fmt if date_fmt is not None else "%Y-%m-%d %H:%M:%S %Z"
         self.tz_aliases = {"Eastern Standard Time": "EST", "Eastern Daylight Time": "EDT"}
-        if (name is not None) and (len(logging._handlerList) < 1):  #Workaround for base logger defaulting to 30/WARNING
+        if (self.name is not None) and (len(logging._handlerList) < 1):  #Workaround for base logger defaulting to 30/WARNING
             logging.getLogger().setLevel(logging.NOTSET)
-        self.logger = logging.getLogger(name)
+        self.logger = logging.getLogger(self.name)
         if replace_handlers:
             self.logger.handlers = []
         self.logger.setLevel(logging.NOTSET)    #Default is 30 / WARNING
@@ -39,6 +54,14 @@ class LogManager:
             self.log_funcs[fn] = getattr(self, fn)
         with ignore_exceptions(InputValidationException):
             self.add_level(19, "VERBOSE", "verbose")
+        self._set_instance(self.name, self)
+
+    @classmethod
+    def _set_instance(cls, name, instance):
+        if name is None:
+            cls._default_instance = instance
+        else:
+            cls._instances[name] = instance
 
     def get_log_funcs(self):
         return self.log_funcs
@@ -89,18 +112,22 @@ class LogManager:
         return CustomLogFilter()
 
     @classmethod
-    def create_formatter(cls, should_format_fn, format_fn):
+    def create_formatter(cls, should_format_fn, cond_fmt_fn, always_fmt_fn=None):
         """
         Example usage of an extra attribute: logging.error("Example message", extra={"red": True})
+
         :param should_format_fn: fn(record) that returns True for the format to be applied, False otherwise
-        :param format_fn: fn(message) that returns the formatted message
+        :param cond_fmt_fn: fn(message) that returns the formatted message
+        :param always_fmt_fn: fn(message) formatting function that is always applied
         :return: A custom, uninitialized subclass of logging.Formatter
         """
         class CustomLogFormatter(logging.Formatter):
             def format(self, record):
                 formatted = super(CustomLogFormatter, self).format(record)
+                if always_fmt_fn is not None:
+                    formatted = always_fmt_fn(formatted)
                 if should_format_fn(record):
-                    formatted = format_fn(formatted)
+                    formatted = cond_fmt_fn(formatted)
                 return formatted
         return CustomLogFormatter
 
@@ -186,6 +213,7 @@ class LogManager:
     def init_default_stream_logger(self, debug=False, verbose=False):
         """
         Initialize a logger that sends INFO messages and below to stdout and WARNING messages and above to stderr
+
         :param bool debug: True to log debug events to stdout, False to hide them
         :param verbose: True to log verbose-level events to stdout, False to hide them
         """
@@ -193,14 +221,16 @@ class LogManager:
         stdout_filter = self.create_filter(lambda lvl: lvl < logging.WARNING)
         self.stdout_lvl = logging.getLevelName("VERBOSE") if verbose else logging.INFO
         self.stdout_lvl = logging.DEBUG if debug else self.stdout_lvl
-        red_formatter = self.create_formatter(lambda rec: getattr(rec, "red", False), lambda msg: colored(msg, "red"))
-        self.add_handler(_uout, self.stdout_lvl, filter=stdout_filter)
+        red_formatter = self.create_formatter(lambda rec: getattr(rec, "red", False), lambda msg: colored(msg, "red"), lambda msg: "\r" + msg.replace("\r", "") if "\r" in msg else msg)
+        cr_mover = self.create_formatter(lambda rec: True, lambda msg: "\r" + msg.replace("\r", "") if "\r" in msg else msg)
+        self.add_handler(_uout, self.stdout_lvl, filter=stdout_filter, formatter=cr_mover)
         self.add_handler(_uerr, fmt="%(levelname)s %(message)s", filter=stderr_filter, formatter=red_formatter)
 
     def init_default_logger(self, debug=False, verbose=False, log_path=None):
         """
         Initialize a logger that sends INFO messages and below to stdout and WARNING messages and above to stderr, and
         also saves all logs to a file.
+
         :param debug: True to log debug events to stdout, False to hide them
         :param verbose: True to log verbose-level events to stdout, False to hide them
         :param log_path: (optional) Path to log file destination, otherwise a default filename is used
@@ -222,7 +252,8 @@ class LogManager:
 
             log_path = "/var/tmp/{}_{}_{}.log".format(calling_module, getpass.getuser(), int(time.time()))
         file_fmt = "%(asctime)s %(levelname)s %(funcName)s:%(lineno)d %(message)s"
-        self.add_handler(log_path, logging.DEBUG, file_fmt, rotate=True)
+        cr_stripper = self.create_formatter(lambda rec: True, lambda msg: msg.replace("\r", ""))
+        self.add_handler(log_path, logging.DEBUG, file_fmt, rotate=True, formatter=cr_stripper)
         return log_path
 
 
@@ -232,6 +263,7 @@ class OutputManager:
         self.last_used_nl = True
         self.term_cols = self.get_term_cols()
         self.lm = log_manager
+        self.lm._set_instance(self.lm.name, self)
         self.clip = clip
         for fn_name in self.lm.get_log_funcs():
             self._add_log_func(fn_name)
@@ -240,18 +272,21 @@ class OutputManager:
         fn = getattr(self.lm, fn_name)
         lvl = logging.getLevelName(fn_name.upper())
         def _log(msg, *args, **kwargs):
-            fn(self.fmt(msg, True, True), *args, **kwargs)
-            if self.lm.stdout_lvl <= lvl:
-                self.need_newline = False
+            fn(self.fmt(msg, True, lvl), *args, **kwargs)
         setattr(self, fn_name, _log)
 
-    def fmt(self, msg, end, log=False, append=False, color=None):
+    def fmt(self, msg, end, lvl=None, append=False, color=None):
         prefix = "" if self.last_used_nl or append else "\r"
-        suffix = "\n" if end and not log else ""
-        delta = len(self.last_msg) - len(msg)
+        suffix = "\n" if (end and (lvl is None)) else ""
+        delta = (len(self.last_msg) - len(msg)) if (prefix == "\r") else 0
         pad = (" " * delta) if (delta > 0) and not self.last_used_nl else ""
-        self.last_msg = msg
-        self.last_used_nl = end
+        self.last_msg = (self.last_msg + msg) if append and not self.last_used_nl else msg
+        if lvl is not None:
+            self.last_used_nl = (self.lm.stdout_lvl <= lvl)
+            if self.lm.stdout_lvl <= lvl:
+                self.last_msg = (self.last_msg + msg) if append and not self.last_used_nl else msg
+        else:
+            self.last_used_nl = end
         if color is not None:
             msg = colored(msg, color)
         msg = "{}{}{}{}".format(prefix, msg, pad, suffix)

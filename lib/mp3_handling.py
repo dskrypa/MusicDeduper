@@ -3,34 +3,55 @@
 from __future__ import print_function, division, unicode_literals
 
 import os
+import json
 import logging
 from io import BytesIO
 from hashlib import sha256
+from cached_property import cached_property
+from collections import defaultdict, namedtuple
 from mutagen.id3._id3v1 import find_id3v1
 from mutagen.mp3 import MP3, BitrateMode
 from mutagen.id3 import ID3
-from cached_property import cached_property
-from collections import defaultdict
 
-# V1_Tags: {"TIT2":"title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
+from _constants import tag_name_map, compilation_indicators
+from log_handling import LogManager
+
+# V1_Tags: {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
+
+"""
+info_columns = ["bitrate", "bitrate_kbps", "bitrate_mode", "channels", "encoder_info", "length", "sample_rate", "sketchy", "time"]
+db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + info_columns + ["v1", "v2", "tag_mismatches"]
+"""
+
+NoTagVal = (None,)
+primary_tags = {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "TRCK":"Track"}
 
 
 class MusicFile:
     info_copy_keys = ["bitrate", "channels", "encoder_info", "length", "sample_rate", "sketchy"]
     bitrate_modes = {getattr(BitrateMode, attr).real: attr for attr in dir(BitrateMode) if attr.isupper()}
+    db_attr_keymap = {"v1_ver": "v1", "v2_ver": "v2", "audio_hash": "audio_sha256", "full_hash": "sha256", "size": "size", "modified": "modified"}
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, dbrow=None):
         self.file_path = file_path
         self.tags_modified = False
         self.v1_ver = None
         self.v2_ver = None
-        try:
-            stat = os.stat(self.file_path)
-        except Exception as e:
-            raise MusicFileOpenException("Unable to open {}: {}".format(self.file_path, e), e)
+        self.lm = LogManager.get_instance()
+
+        if dbrow is None:
+            try:
+                stat = os.stat(self.file_path)
+            except Exception as e:
+                raise MusicFileOpenException("Unable to open {}: {}".format(self.file_path, e), e)
+            else:
+                self.size = int(stat.st_size)
+                self.modified = int(stat.st_mtime)
         else:
-            self.size = int(stat.st_size)
-            self.modified = int(stat.st_mtime)
+            RawInfo = namedtuple("RawInfo", self.info_copy_keys)
+            self._raw_info = RawInfo(**{k: dbrow[k] for k in self.info_copy_keys})
+            self.__dict__.update({attr: dbrow[key] for attr, key in self.db_attr_keymap.iteritems()})
+            self.tag_dict = json.loads(dbrow["tags"])
 
     @cached_property
     def content(self):
@@ -63,8 +84,12 @@ class MusicFile:
         return ID3(self.file_path)
 
     @cached_property
+    def _raw_info(self):
+        return self.mp3.info
+
+    @cached_property
     def info(self):
-        raw_info = self.mp3.info
+        raw_info = self._raw_info
         info = {key: getattr(raw_info, key) for key in self.info_copy_keys}
         info["bitrate_kbps"] = raw_info.bitrate // 1000
         info["bitrate_mode"] = self.bitrate_modes[raw_info.bitrate_mode.real]
@@ -75,8 +100,19 @@ class MusicFile:
 
     @cached_property
     def tags(self):
+        if "tag_dict" in self.__dict__:
+            del self.__dict__["tag_dict"]   #invalidate cached tag_dict
+
+        if self.mp3.tags is None:
+            return {}
+
         if self.mp3.tags.unknown_frames:
-            raise UnknownFrameException("Found unknown frames: {}".format(self.mp3.tags.unknown_frames))
+            unknown_frames = {frame[:4]: frame[4:] for frame in self.mp3.tags.unknown_frames}
+            for ufid in unknown_frames:
+                if ufid not in tag_name_map:
+                    self.lm.warning("{}: Found unknown frames: {}".format(self.file_path, self.mp3.tags.unknown_frames))
+                    break
+            #raise UnknownFrameException("Found unknown frames: {}".format(self.mp3.tags.unknown_frames))
 
         tags = {}
         if self.mp3.tags.version[0] == 2:
@@ -106,7 +142,8 @@ class MusicFile:
         else:
             return frame._pprint()
 
-    def get_tag_dict(self):
+    @cached_property
+    def tag_dict(self):
         """
         Generates a dict of tag IDs and representations of their values, based on the tag's _pprint() method (the non-
         private version returns the ID as well)
@@ -129,19 +166,78 @@ class MusicFile:
                     tag_dict[ver][key] = self.tag_val(value)
         return tag_dict
 
+    def __getitem__(self, item):
+        if len(self.tag_dict) < 1:
+            raise KeyError(item)
+        elif (self.v1_ver is None) or (self.v2_ver is None):
+            return self.tag_dict[self.v1_ver or self.v2_ver][item]
+        elif item not in self.tag_dict[self.v1_ver]:
+            return self.tag_dict[self.v2_ver][item]
+        elif item not in self.tag_dict[self.v2_ver]:
+            return self.tag_dict[self.v1_ver][item]
+
+        v1_val = self.tag_dict[self.v1_ver][item]
+        v2_val = self.tag_dict[self.v2_ver][item]
+        if v1_val == v2_val:
+            return v2_val
+
+        msg = "{}/{}:{{[{}]'{}' != [{}]'{}'}}".format(item, tag_name_map.get(item, "?"), self.v1_ver, v1_val, self.v2_ver, v2_val)
+        raise TagVersionMismatchException(msg)
+
+    def get_tag(self, tag_id, *args):
+        try:
+            val = self[tag_id]
+        except KeyError as e:
+            if args:
+                return args[0]
+            raise e
+        else:
+            return val
+
+    def __contains__(self, item):
+        try:
+            self[item]
+        except KeyError:
+            return False
+        except TagVersionMismatchException:
+            pass
+        return True
+
+    @cached_property
+    def compilation(self):
+        if "TCMP" in self:
+            return True
+
+        # compare normalized artist/album names against compilation indicators
+        # Write better normalization function based on unicode cookbooks
+
+    def get_primary_tags(self):
+        tags = {}
+        mismatches = []
+        for id, readable in primary_tags.iteritems():
+            try:
+                tags[readable] = self.get_tag_value(id)
+            except TagVersionMismatchException as e:
+                mismatches.append(e.args[0])
+
+        if len(mismatches) > 0:
+            raise TagVersionMismatchException(", ".join(mismatches))
+        return tags
+
     def get_mismatch_keys(self):
         if (self.v1_ver is None) or (self.v2_ver is None):
             return []
         mismatches = []
-        tag_dict = self.get_tag_dict()
-        for tid, v1_val in tag_dict[self.v1_ver].iteritems():
-            v2_val = tag_dict[self.v2_ver].get(tid, None)
+        for tid, v1_val in self.tag_dict[self.v1_ver].iteritems():
+            v2_val = self.tag_dict[self.v2_ver].get(tid, None)
             if (v2_val != v1_val) and (not isinstance(v2_val, unicode) or not v2_val.startswith(v1_val)):
                 mismatches.append(tid)
         return mismatches
 
     @classmethod
     def _ftime(cls, seconds):
+        if isinstance(seconds, (str, unicode)):
+            return seconds
         m, s = divmod(abs(int(round(seconds))), 60)
         h, m = divmod(m, 60)
         return "{}{:02d}:{:02d}".format("{:02d}:".format(h) if h > 0 else "", m, s)
@@ -171,9 +267,25 @@ class MusicFile:
             logging.debug("Not changed: {}".format(self.file_path))
 
 
+def _normalize(val):
+    if not val:
+        return val
+    elif isinstance(val, (str, unicode)):
+        return val.lower().replace(" ", "")
+    return val
+
+
 class MusicFileOpenException(Exception):
     pass
 
 
 class UnknownFrameException(Exception):
+    pass
+
+
+class TagVersionMismatchException(Exception):
+    pass
+
+
+class NoTagsFoundException(Exception):
     pass

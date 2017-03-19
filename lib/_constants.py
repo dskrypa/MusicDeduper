@@ -1,7 +1,12 @@
 
 v1_fields = ["title","artist","album","year","comment","track","genre"]
 
-tagTypes= {
+compilation_indicators = {
+    "artists": {"soundtrack", "variousartists", "various", "varios"},
+    "albums": {"billboard", "now thats what i call music", "power trakks"}
+}
+
+tag_name_map = {
     #iTunes Verified Fields
     "TIT2": "Song title",
     "TALB": "Album",
@@ -116,6 +121,16 @@ tagTypes= {
     "ITNU": "iTunesU? [invalid]",
     "TCAT": "Podcast Category? [invalid]",
     "MJCF": "MediaJukebox? [invalid]",
+    "RGAD": "Replay Gain Adjustment [invalid]",                             #Not widely supported; superseded by RVA2
+    "NCON": "MusicMatch data [invalid]",                                    #MusicMatch proprietary binary data
+    "XTCP": "(unknown) [invalid]",
+    "XCM1": "(ripper message?) [invalid]",
+    "XSOP": "Performer Sort Order [invalid]",
+    "XSOT": "Title Sort Order [invalid]",
+    "XSOA": "Album Sort Order [invalid]",
+    "XDOR": "Original Release Time [invalid]",
+    "TZZZ": "Text frame [invalid]",
+    "CM1": "Comment? [invalid]"
 }
 
 v1_genres = [

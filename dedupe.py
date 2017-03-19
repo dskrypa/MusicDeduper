@@ -8,11 +8,12 @@ import logging
 import argparse
 from collections import OrderedDict, defaultdict, Counter
 
-from lib.common import getFilteredPaths
+from lib.common import getFilteredPaths, path_usable_str
 from lib.log_handling import LogManager, OutputManager
 from lib.alchemy_db import AlchemyDatabase, DBTable
 from lib.output_formatting import fTime, Printer, format_percent, format_output, OutputTable, OutputColumn
-from lib.mp3_handling import MusicFile, MusicFileOpenException
+from lib.mp3_handling import MusicFile, MusicFileOpenException, NoTagVal, TagVersionMismatchException
+from lib._constants import tag_name_map
 
 """
 Notes:
@@ -20,11 +21,16 @@ Notes:
 """
 
 default_db_path = "/var/tmp/music_deduper.db"
+preferred_version = "2.3.0"
 
 info_columns = ["bitrate", "bitrate_kbps", "bitrate_mode", "channels", "encoder_info", "length", "sample_rate", "sketchy", "time"]
 info_types = ["INT", "INT", "TEXT", "INT", "TEXT", "FLOAT", "INT", "BOOLEAN", "TEXT"]
 db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + info_columns + ["v1", "v2", "tag_mismatches"]
 db_types = ["TEXT", "INT", "INT", "TEXT", "TEXT", "TEXT"] + info_types + ["TEXT", "TEXT", "TEXT"]
+
+# V1_Tags: {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
+
+primary_tags = {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "TRCK":"Track"}
 
 
 def main():
@@ -40,8 +46,9 @@ def main():
     #parser3.add_argument("scan_dir", help="The directory to scan for music")
 
     parser4 = sparsers.add_parser("report", help="")
-    parser4.add_argument("report_name", choices=("mismatch", "unique", "dupes", "sketchy", "tag_popularity"), help="Name of report to run")
+    parser4.add_argument("report_name", choices=("mismatch", "unique", "dupes", "sketchy", "tag_popularity", "files_with_tag", "name_variations"), help="Name of report to run")
     parser4.add_argument("--analysis_mode", "-am", choices=("audio", "full"), default="full", help="")
+    parser4.add_argument("--tag", "-t", help="Tag to find for files_with_tag report")
 
     for _parser in sparsers.choices.values() + [parser]:
         _parser.add_argument("--db_path", "-db", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
@@ -66,7 +73,7 @@ def main():
                     print(row["path"], json.dumps(tags.keys()))
     elif args.action == "report":
         deduper = Deduper(lm, args.db_path)
-        deduper.report(args.report_name, analysis_mode=args.analysis_mode)
+        deduper.report(args.report_name, analysis_mode=args.analysis_mode, find_tag=args.tag)
 
 
 class Deduper:
@@ -75,6 +82,16 @@ class Deduper:
         self.db = AlchemyDatabase(db_path, logger=self.lm)
         self.music = DBTable(self.db, "music", zip(db_columns, db_types), "path")
         self.p = Printer("json-pretty")
+
+    def dedupe(self):
+        """
+        Generate a deduplication plan
+        """
+        destinations = {"compilation": {}, "podcast": {}, "by_artist": {}, "problematic": {"tag_mismatch": {}, "missing_info": {}, "bad": {}}}
+        placement_tags = {"albumArtist": "TPE2", "artist": "TPE1", "album": "TALB", "title": "TIT2", "": "", "": ""}
+
+        for row in self.music:
+            song = MusicFile(row["path"], row)
 
     def view(self, with_tags=None):
         p = Printer("table")
@@ -154,6 +171,72 @@ class Deduper:
                 row = {"tag": key, "count": all_tags[key], "percent": format_output(format_percent(all_tags[key], count), False, None, 6, "r")}
                 report.append(OrderedDict([(k, row[k]) for k in cols]))
             p.pprint(report, include_header=True, add_bar=True)
+        elif report_name == "files_with_tag":
+            find_tag = kwargs["find_tag"].upper()
+            count = 0
+            for row in self.music:
+                tags = json.loads(row["tags"])
+                if row["v2"] is not None:
+                    vtags = tags[row["v2"]]
+                elif row["v1"] is not None:
+                    vtags = tags[row["v1"]]
+                else:
+                    continue
+                if find_tag in vtags:
+                    count += 1
+                    if count > 1:
+                        print()
+                    print(row["path"])
+                    for tag, value in vtags.iteritems():
+                        friendly = tag_name_map.get(tag, "[unknown]")
+                        print("    [{} / {}]: {}".format(tag, friendly, value))
+        elif report_name == "name_variations":
+            # TODO: Improve variation detection (punctuation, equivalent chars (e.g., +/&/and), unicode normalization)
+
+            artists = defaultdict(set)
+            albums = defaultdict(set)
+            for row in self.music:
+                song = MusicFile(row["path"], row)
+                for tid in ("TPE1", "TPE2"):
+                    try:
+                        artist = song.get_tag(tid, NoTagVal)
+                    except TagVersionMismatchException as e:
+                        self.lm.error("{}: {}".format(song.file_path, e))
+                    else:
+                        if artist is not NoTagVal:
+                            try:
+                                artists[path_usable_str(artist, True, True)].add(artist)
+                            except ValueError as e:
+                                self.lm.error("{}: artist '{}' [{}]".format(e, artist, song.file_path))
+
+                try:
+                    album = song.get_tag("TALB", NoTagVal)
+                except TagVersionMismatchException as e:
+                    self.lm.error("{}: {}".format(song.file_path, e))
+                else:
+                    if album is not NoTagVal:
+                        try:
+                            albums[path_usable_str(album, True, True)].add(album)
+                        except ValueError as e:
+                            self.lm.error("{}: album '{}' [{}]".format(e, album, song.file_path))
+
+            print("Artist variations:")
+            artist_variations = 0
+            for artist_set in artists.itervalues():
+                if len(artist_set) > 1:
+                    artist_variations += 1
+                    print(", ".join("'{}'".format(artist) for artist in artist_set))
+            if artist_variations == 0:
+                print("None!")
+
+            print("Album variations:")
+            album_variations = 0
+            for album_set in albums.itervalues():
+                if len(album_set) > 1:
+                    album_variations += 1
+                    print(", ".join("'{}'".format(album) for album in album_set))
+            if album_variations == 0:
+                print("None!")
 
     def analyze(self, analysis_mode):
         if analysis_mode not in ("full", "audio"):
@@ -193,12 +276,12 @@ class Deduper:
                         info = mf.info
                         row = {
                             "path": file_path, "modified": mf.modified, "size": mf.size,
-                            "tags": json.dumps(mf.get_tag_dict()),
-                            "sha256": mf.full_hash, "audio_sha256": mf.audio_hash,
+                            "tags": json.dumps(mf.tag_dict), "sha256": mf.full_hash, "audio_sha256": mf.audio_hash,
                             "v1": mf.v1_ver, "v2": mf.v2_ver, "tag_mismatches": json.dumps(mf.get_mismatch_keys())
                         }
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))
+                        logging.debug("{}:{}".format(e.__class__.__name__, e))
                         continue
                     else:
                         row.update({key: info[key] for key in info_columns})
@@ -247,8 +330,9 @@ class ProgressMonitor:
         self.c += 1
         dt = self.elapsed()
         if (dt - self.last_time) > 0.33:
-            rate = self.c / dt if dt > 0 else 1
-            remaining = fTime((self.total - self.c) / rate)
+            processed = self.c - self.skipped
+            rate = processed / dt if dt > 0 else 1
+            remaining = fTime((self.total - processed) / rate) if (processed > 5) else "??:??:??"
             self.last_time = dt
             self.lm.printf(self.spfmt, self.c / self.total, self.c, self.elapsedf(), self.skipped, self.errors, rate, remaining, end=False, append=False)
 
