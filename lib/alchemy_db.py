@@ -5,17 +5,21 @@ from __future__ import print_function, division
 import os
 import json
 from collections import OrderedDict
-import sqlalchemy
+
 from sqlalchemy import create_engine, MetaData, Table, Column
 from sqlalchemy.orm import mapper, sessionmaker
 from sqlalchemy.exc import NoSuchTableError
-import sqlalchemy.types
+import sqlalchemy.types as sqltypes
 
 from common import InputValidationException
 from log_handling import LogManager
 
+defintions_metatable = "__table_defs__"
+
 
 class AlchemyDatabase:
+    _instances = {}
+
     def __init__(self, db_path=None, echo=False, logger=None):
         if logger is None:
             self.logger, log_path = LogManager.create_default_logger()
@@ -31,15 +35,38 @@ class AlchemyDatabase:
         self.session = sessionmaker(bind=self.engine)()
         self.session.autocommit = True
         self._tables = {}
+        self.add_table(defintions_metatable, [("name", "TEXT"), ("columns", "TEXT")], "name")
         for tbl in self.engine.table_names():
-            self.add_table(tbl)
+            if tbl != defintions_metatable:
+                self.add_table(tbl)
+        self._instances[self.db_path] = self
+
+    @property
+    def tables(self):
+        return self._tables
+
+    @classmethod
+    def get_db(cls, db_path, *args, **kwargs):
+        if db_path not in cls._instances:
+            cls._instances[db_path] = cls(db_path, *args, **kwargs)
+        return cls._instances[db_path]
 
     def add_table(self, name, columns=None, pk=None):
-        self._tables[name] = DBTable(self, name, columns, pk)
-        return self._tables[name]
+        if name in self._tables:
+            raise KeyError("Table '{}' already exists".format(name))
+        return DBTable(self, name, columns, pk)
+
+    def register_table(self, db_table):
+        if not isinstance(db_table, DBTable):
+            raise TypeError("Invalid db_table type - expected DBTable, found: {}".format(type(db_table).__name__))
+        if db_table.name not in self._tables:
+            self._tables[db_table.name] = db_table
 
     def __getitem__(self, key):
         return self._tables[key]
+
+    def __contains__(self, item):
+        return item in self._tables
 
     def __iter__(self):
         for table in self._tables:
@@ -51,6 +78,8 @@ class AlchemyDatabase:
         tbl1.insert([0, "hello db"])
         self["test_2"]["bob@gmail.com"] = ["bob"]
         self["test_1"].insert([1, "line2"])
+        pickle_table = self.add_table("pickled", [("id", "INTEGER"), ("values", "PickleType")])
+        pickle_table.insert([0, {"z": 1, "x": ["a", "b", "c"]}])
 
 
 class DBTable(object):
@@ -66,6 +95,9 @@ class DBTable(object):
                     setattr(row, key, value)
                 else:
                     raise KeyError(key)
+
+            def __len__(row):
+                return len(self.columns)
 
             def update(row, d=None, **kwargs):
                 if d is not None:
@@ -96,6 +128,8 @@ class DBTable(object):
         self.name = name
         self.rowType = DBRow
         self.session = self.db.session
+
+        col_types = None
         try:
             self.table = Table(self.name, self.db.meta, autoload=True)
         except NoSuchTableError as e:
@@ -105,15 +139,26 @@ class DBTable(object):
             cols = OrderedDict()
             for col in columns:
                 if isinstance(col, tuple):
-                    cols[col[0]] = getattr(sqlalchemy.types, col[1]) if hasattr(sqlalchemy.types, col[1]) else None
+                    cols[col[0]] = getattr(sqltypes, col[1]) if hasattr(sqltypes, col[1]) else None
                 else:
                     cols[col] = None
+
+            col_types = [[k, v.__name__ if v is not None else None] for k, v in cols.iteritems()]
+
             if pk is None:
                 pk = cols.keys()[0]
             elif pk not in cols:
                 raise KeyError("The provided PK is not one of the provided columns: {}".format(pk))
             table_cols = [Column(n, t) if pk != n else Column(n, t, primary_key=True) for n, t in cols.iteritems()]
             self.table = Table(self.name, self.db.meta, *table_cols)
+            if self.name != defintions_metatable:
+                self.db[defintions_metatable].insert([self.name, json.dumps(col_types)])
+        else:
+            if (self.name != defintions_metatable) and (self.name in self.db[defintions_metatable]):
+                for col_name, col_type in json.loads(self.db[defintions_metatable][self.name]["columns"]):
+                    actual_col = self.table.columns[col_name]
+                    if (col_type is not None) and (type(actual_col.type).__name__ != col_type):
+                        actual_col.type = getattr(sqltypes, col_type)()
         mapper(self.rowType, self.table)
 
         self.columns = OrderedDict(self.table.columns.items())
@@ -128,6 +173,10 @@ class DBTable(object):
 
         if self.name not in self.db.engine.table_names():
             self.db.meta.create_all()
+
+        if (self.name == defintions_metatable) and (self.name not in self):
+            self.insert([self.name, json.dumps(col_types)])
+        self.db.register_table(self)
 
     def select(self, **kwargs):
         return self.rows().filter_by(**kwargs)
@@ -191,6 +240,52 @@ class DBTable(object):
     def rows(self):
         return [row for row in self.session.query(self.rowType)]
 
+
+class DBTableDict(DBTable):
+    def __init__(self, *args, **kwargs):
+        super(DBTableDict, self).__init__(*args, **kwargs)
+        self.val_col_names = [col[0] for col in self.columns if col[0] != self.pk]
+
+
+    def __getitem__(self, key):
+
+        row = super(DBTableDict, self).__getitem__(key)
+        if len(self.val_col_names) == 1:
+            return row[self.val_col_names[0]]
+        return
+
+
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, (list, dict, tuple)):
+            raise TypeError("Expected tuple, list, or dict; found {}".format(type(value)))
+        col_count = len(self.columns)
+        if len(value) not in (col_count, col_count - 1):
+            raise InputValidationException("Invalid number of elements in the provided row: {}".format(len(value)))
+
+        if isinstance(value, dict):
+            row = dict(value)
+            if (self.pk in row) and (row[self.pk] != key):
+                raise KeyError("The PK '{}' does not match the value in the provided row: {}".format(key, row[self.pk]))
+            elif self.pk not in row:
+                row[self.pk] = key
+        else:
+            row_list = list(value)
+            if len(value) != col_count:
+                row_list.insert(self.pk_pos, key)
+            row = dict(zip(self.columns.keys(), row_list))
+
+        try:
+            self[key].update(row)
+        except KeyError:
+            self.insert(row)
+
+    def __iter__(self):
+        for row in self.session.query(self.rowType):
+            yield row
+
+    def iteritems(self):
+        pass
 
 if __name__ == "__main__":
     lm = LogManager.create_default_stream_logger(True)
