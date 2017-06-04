@@ -148,7 +148,7 @@ class Printer:
         elif self.output_format == "json-pretty":
             return json.dumps(content, sort_keys=True, indent=4)
         elif self.output_format == "text":
-            return format_tiered(content)
+            return "\n".join(format_tiered(content))
         elif self.output_format == "yaml":
             if isinstance(content, dict) or kwargs.pop("force_single_yaml", False):
                 formatted = yaml.dump(_clean_unicode(content), explicit_start=True, default_flow_style=False)
