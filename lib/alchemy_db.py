@@ -1,11 +1,12 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 
 import os
 import json
 from collections import OrderedDict
 
+from cached_property import cached_property
 from sqlalchemy import create_engine, MetaData, Table, Column
 from sqlalchemy.orm import mapper, sessionmaker
 from sqlalchemy.exc import NoSuchTableError
@@ -211,7 +212,8 @@ class DBTable(object):
             raise TypeError("Expected tuple, list, or dict; found {}".format(type(value)))
         col_count = len(self.columns)
         if len(value) not in (col_count, col_count - 1):
-            raise InputValidationException("Invalid number of elements in the provided row: {}".format(len(value)))
+            raise InputValidationException("Expected {}~{} elements; found {}".format(col_count - 1, col_count, len(value)))
+            #raise InputValidationException("Invalid number of elements in the provided row: {}".format(len(value)))
 
         if isinstance(value, dict):
             row = dict(value)
@@ -240,52 +242,37 @@ class DBTable(object):
     def rows(self):
         return [row for row in self.session.query(self.rowType)]
 
+    @cached_property
+    def simple(self):
+        return SimpleDBTable(self)
 
-class DBTableDict(DBTable):
-    def __init__(self, *args, **kwargs):
-        super(DBTableDict, self).__init__(*args, **kwargs)
-        self.val_col_names = [col[0] for col in self.columns if col[0] != self.pk]
 
+class SimpleDBTable(object):
+    def __init__(self, db_table):
+        cols = dict(db_table.columns)
+        if len(cols) > 2:
+            raise ValueError("SimpleDBTable only accepts tables with 2 columns; {} has {}".format(db_table.name, len(cols)))
+        cols.pop(db_table.pk)
+        self.val_col = cols.keys()[0]
+        self.table = db_table
 
     def __getitem__(self, key):
-
-        row = super(DBTableDict, self).__getitem__(key)
-        if len(self.val_col_names) == 1:
-            return row[self.val_col_names[0]]
-        return
-
-
+        return self.table[key][self.val_col]
 
     def __setitem__(self, key, value):
-        if not isinstance(value, (list, dict, tuple)):
-            raise TypeError("Expected tuple, list, or dict; found {}".format(type(value)))
-        col_count = len(self.columns)
-        if len(value) not in (col_count, col_count - 1):
-            raise InputValidationException("Invalid number of elements in the provided row: {}".format(len(value)))
+        self.table[key] = [value]
 
-        if isinstance(value, dict):
-            row = dict(value)
-            if (self.pk in row) and (row[self.pk] != key):
-                raise KeyError("The PK '{}' does not match the value in the provided row: {}".format(key, row[self.pk]))
-            elif self.pk not in row:
-                row[self.pk] = key
-        else:
-            row_list = list(value)
-            if len(value) != col_count:
-                row_list.insert(self.pk_pos, key)
-            row = dict(zip(self.columns.keys(), row_list))
-
-        try:
-            self[key].update(row)
-        except KeyError:
-            self.insert(row)
+    def __contains__(self, item):
+        return item in self.table
 
     def __iter__(self):
-        for row in self.session.query(self.rowType):
-            yield row
+        for row in self.table:
+            yield row[self.val_col]
 
     def iteritems(self):
-        pass
+        for row in self.table:
+            yield row[self.table.pk], row[self.val_col]
+
 
 if __name__ == "__main__":
     lm = LogManager.create_default_stream_logger(True)
