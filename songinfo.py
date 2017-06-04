@@ -6,6 +6,23 @@ import logging
 import argparse
 from collections import OrderedDict
 
+
+if not __file__.endswith(".py"):    #Git bash on windows doesn't properly detect when this file is symlinked
+    import os
+    import sys
+    from subprocess import Popen, PIPE
+    from unidecode import unidecode
+    p = Popen(["stat", os.path.abspath(__file__)], stdout=PIPE, stderr=PIPE)
+    stdout, stderr = p.communicate()
+    exit_code = p.wait()
+    try:
+        __relpath = unidecode(stdout.splitlines()[0].decode("utf-8")).split("->")[1].split("'")[1]
+    except IndexError:
+        pass
+    else:
+        __filepath = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), __relpath))
+        sys.path.append(os.path.dirname(__filepath))
+
 from lib._constants import tag_name_map
 from lib.common import DefaultOrderedDict
 from lib.log_handling import LogManager
@@ -27,13 +44,25 @@ def main():
     lm = LogManager.create_default_stream_logger(args.debug, args.verbose)
     mf = MusicFile(args.file_path)
 
+    show_songinfo(mf, args.format)
+
+    if args.lookup:
+        p = Printer(args.format if args.format != "table" else "yaml")
+        acoustid_db = AcoustidDB()
+        if args.lookup > 1:
+            p.pprint(acoustid_db._lookup(*mf.fingerprint))
+        else:
+            p.pprint(acoustid_db.lookup(*mf.fingerprint))
+
+
+def show_songinfo(mf, format):
     info = dict(mf.info)
     info["bitrate"] = info["bitrate_readable"]
     for k in ("bitrate_kbps", "bitrate_mode", "bitrate_readable", "info"):
         del info[k]
 
-    if args.format != "table":
-        p = Printer(args.format)
+    if format != "table":
+        p = Printer(format)
         p.pprint(OrderedDict([("File Info", info), ("ID3 Tags", mf.tag_dict)]))
     else:
         p = Printer("yaml")
@@ -56,13 +85,6 @@ def main():
                     row["=?="] = "==" if same_val else "!="
             rows.append(row)
         Printer("table").pprint(rows, include_header=True, add_bar=True)
-
-    if args.lookup:
-        acoustid_db = AcoustidDB()
-        if args.lookup > 1:
-            p.pprint(acoustid_db._lookup(*mf.fingerprint))
-        else:
-            p.pprint(acoustid_db.lookup(*mf.fingerprint))
 
 
 if __name__ == "__main__":

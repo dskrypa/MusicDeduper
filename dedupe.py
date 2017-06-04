@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division, unicode_literals
 
+import re
 import time
 import json
 import logging
@@ -15,8 +16,9 @@ from lib.common import getFilteredPaths, path_usable_str
 from lib.log_handling import LogManager, OutputManager
 from lib.alchemy_db import AlchemyDatabase, DBTable
 from lib.output_formatting import fTime, Printer, format_percent, format_output, OutputTable, OutputColumn
-from lib.mp3_handling import MusicFile, MusicFileOpenException, NoTagVal, TagVersionMismatchException, AcoustidDB, TagReplacementDB
+from lib.mp3_handling import MusicFile, MusicFileOpenException, NoTagVal, TagVersionMismatchException, AcoustidDB, TagReplacementDB, TagValueException
 from lib._constants import tag_name_map
+from songinfo import show_songinfo
 
 """
 Notes:
@@ -58,6 +60,9 @@ def main():
 
     parser5 = sparsers.add_parser("lookup", help="")
     parser6 = sparsers.add_parser("organize", help="")
+    parser6m = parser6.add_mutually_exclusive_group()
+    parser6m.add_argument("--forget", "-F", nargs=2, metavar="field, value", help="Remove rows from the sorting table with the given value in the given field")
+    parser6m.add_argument("--forget_regex", "-R", nargs=2, metavar="field, pattern", help="Remove rows from the sorting table that match the given pattern in the given field")
 
     for _parser in sparsers.choices.values() + [parser]:
         _parser.add_argument("--db_path", "-db", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
@@ -67,13 +72,19 @@ def main():
 
     lm, log_path = LogManager.create_default_logger(args.debug, args.verbose)
     lm.verbose("Logging to: {}".format(log_path))
+    lm.debug(Printer.jsonp(dict(args._get_kwargs())))
 
     if args.action == "scan":
         deduper = Deduper(lm, args.db_path)
         deduper.scan(args.scan_dir)
     elif args.action == "organize":
         deduper = Deduper(lm, args.db_path)
-        deduper.organize()
+        if args.forget:
+            deduper.organize_forget(*args.forget)
+        elif args.forget_regex:
+            deduper.organize_forget(*args.forget_regex, regex=True)
+        else:
+            deduper.organize()
     elif args.action == "view":
         deduper = Deduper(lm, args.db_path)
         deduper.view(args.tags)
@@ -94,6 +105,7 @@ def main():
 class Deduper:
     def __init__(self, log_manager, db_path):
         self.lm = OutputManager(log_manager)
+        self.lm.verbose("Opening DB: {}".format(db_path))
         self.db = AlchemyDatabase.get_db(db_path, logger=self.lm)
         self.music = DBTable(self.db, "music", zip(db_columns, db_types), "path")
         self.fixing = DBTable(self.db, "fixed", zip(fixing_cols, fixing_types), "path")
@@ -101,24 +113,76 @@ class Deduper:
         self.p = Printer("json-pretty")
         self.tag_repl_db = TagReplacementDB.instance
 
-    def _resolve_mismatch(self, file_path, tagid, field, e):
-        print("\nOptions for {}".format(file_path))
+    def _resolve_mismatch(self, song, tagid, field, e):
+        diffp1, diffp2 = 0, 0
+        if tagid in ("TALB", "TIT2", "TPE1"):       # Check for corrupted / garbage name
+            full_len1 = len(e.v1)
+            ascii1 = e.v1.encode("ascii", "ignore")
+            clean_len1 = len(ascii1)
+            diff1 = full_len1 - clean_len1
+            diffp1 = diff1 / full_len1
+            full_len2 = len(e.v2)
+            ascii2 = e.v2.encode("ascii", "ignore")
+            clean_len2 = len(ascii2)
+            diff2 = full_len2 - clean_len2
+            diffp2 = diff2 / full_len2
+            min_ord1 = min(ord(c) for c in e.v1)
+            min_ord2 = min(ord(c) for c in e.v2)
+            #print(locals())
+
+            if (diff1 == 0) and (min_ord1 > 31) and ((diffp2 > 0.3) or (min_ord2 < 32)):
+                logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v1, e.v2))
+                return e.v1 #Option 3
+            elif (diff2 == 0) and (min_ord2 > 31) and ((diffp1 > 0.3) or (min_ord1 < 32)):
+                logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v2, e.v1))
+                return e.v2 #Option 4
+            # if (diffp1 < 0.7) and (diff2 == 0):
+            #     logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v2, e.v1))
+            #     return e.v2 #Option 4
+            # elif (diffp2 < 0.7) and (diff1 == 0):
+            #     logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v1, e.v2))
+            #     return e.v1 #Option 3
+        elif tagid == "TDRC":
+            if e.v1.isdigit() and (not e.v2.isdigit()) and (len(e.v1) == 4):
+                logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v1, e.v2))
+                return e.v1
+            elif e.v2.isdigit() and (not e.v1.isdigit()) and (len(e.v2) == 4):
+                logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v2, e.v1))
+                return e.v2
+
+            daterx = re.compile(r"(\d{4})[-/.]\d{2}[-/.]\d{2}(?:\s\d{2}:\d{2}(?::\d{2})?)?")
+            m1 = daterx.match(e.v1)
+            m2 = daterx.match(e.v2)
+            if (len(e.v2) == 0) and m1:
+                newval = m1.group(1)
+                logging.info("Automatically choosing {} value of '{}' over '{}' and '{}'".format(field, newval, e.v1, e.v2))
+                return newval
+            elif (len(e.v1) == 0) and m2:
+                newval = m1.group(1)
+                logging.info("Automatically choosing {} value of '{}' over '{}' and '{}'".format(field, newval, e.v1, e.v2))
+                return newval
+
+        print("\nOptions for {}".format(song.file_path))
         print("1) For all {}/{} tags, replace '{}' with '{}'".format(tagid, field, e.v1, e.v2))
         print("2) For all {}/{} tags, replace '{}' with '{}'".format(tagid, field, e.v2, e.v1))
-        print("3) For just this file, set the {} to '{}'".format(field, e.v1))
-        print("4) For just this file, set the {} to '{}'".format(field, e.v2))
+        print("3) For just this file, set the {} to '{}' ({:.2%} ascii)".format(field, e.v1, 1 - diffp1))
+        print("4) For just this file, set the {} to '{}' ({:.2%} ascii)".format(field, e.v2, 1 - diffp2))
         print("5) For all {}/{} tags, replace '{}' with a custom value".format(tagid, field, e.v1))
         print("6) For all {}/{} tags, replace '{}' with a custom value".format(tagid, field, e.v2))
         print("7) For just this file, replace the {} with a custom value".format(field))
-        print("s) Skip this file | x) Exit")
+        print("m) View more info about this file | s) Skip this file | q) Quit")
 
         inpt = None
         while not inpt:
             inpt = readchar()
-            if (inpt == "x") or (ord(inpt) == 3):
+            if inpt == "m":
+                show_songinfo(song, "yaml")
+                inpt = None
+                print("Please enter a choice from the options above")
+            elif (inpt in ("x", "q")) or (ord(inpt) == 3):
                 raise KeyboardInterrupt()
             elif inpt in ("s", "S"):
-                return ""
+                raise SkipFile()
             elif inpt not in ("1", "2", "3", "4", "5", "6", "7"):
                 print("Invalid input; please enter a choice from the options above")
                 inpt = None
@@ -144,25 +208,52 @@ class Deduper:
                 self.tag_repl_db[tagid][e.v2] = custom
             return custom
 
+    def organize_forget(self, field, value, regex=False):
+        if field not in ("artist", "year", "album", "track", "title", "bitrate", "path"):
+            raise ValueError("Unknown field: {}".format(field))
+        to_delete = []
+        if regex:
+            pattern = re.compile(value)
+            for row in self.fixing:
+                if pattern.match(row[field]):
+                    self.lm.verbose("Forgetting {}".format(row["path"]))
+                    to_delete.append(row["path"])
+        else:
+            for row in self.fixing:
+                if row[field] == value:
+                    self.lm.verbose("Forgetting {}".format(row["path"]))
+                    to_delete.append(row["path"])
+        self.fixing.bulk_delete(to_delete)
+
     def organize(self):
         placement_tags = {"albumArtist": "TPE2", "artist": "TPE1", "album": "TALB", "title": "TIT2", "track": "TRCK", "year": "TDRC"}
         organizing = defaultdict(lambda: defaultdict(list))
         width_finders = defaultdict(set)
         for row in self.music:
-            song = MusicFile(row["path"], row)
+            try:
+                song = MusicFile(row["path"], row)
+            except KeyError as e:
+                logging.error("KeyError for {} on {}".format(e, row["path"]))
+                self.p.pprint(row.as_dict())
+                raise e
+                #continue
+
             try:
                 song_fields = self.fixing[song.file_path]
             except KeyError:
                 song_fields = {"bitrate": song.info["bitrate_readable"], "path": song.file_path}
-                for field, tagid in placement_tags.iteritems():
-                    try:
-                        song_fields[field] = song.get_tag(tagid, NoTagVal)
-                    except TagVersionMismatchException as e:
-                        song_fields[field] = self._resolve_mismatch(song.file_path, tagid, field, e)
-                    else:
-                        if song_fields[field] is NoTagVal:
-                            logging.warning("No {}/{} value found for {}".format(tagid, field, song.file_path))
-                            song_fields[field] = ""
+                try:
+                    for field, tagid in placement_tags.iteritems():
+                        try:
+                            song_fields[field] = song.get_tag(tagid, NoTagVal)
+                        except (TagVersionMismatchException, TagValueException) as e:
+                            song_fields[field] = self._resolve_mismatch(song, tagid, field, e)
+                        else:
+                            if song_fields[field] is NoTagVal:
+                                logging.warning("No {}/{} value found for {}".format(tagid, field, song.file_path))
+                                song_fields[field] = ""
+                except SkipFile:
+                    continue
                 artist = song_fields["albumArtist"] if song_fields["albumArtist"] else song_fields["artist"]
                 song_fields["artist"] = artist
                 del song_fields["albumArtist"]
@@ -179,13 +270,13 @@ class Deduper:
                     rows.append(song)
 
         tbl = OutputTable([
-            ("artist", OutputColumn("Artist", (width_finders, "artist"), True)),
+            ("artist", OutputColumn("Artist", width_finders["artist"], True)),
             ("year", OutputColumn("Year", 4, True)),
-            ("album", OutputColumn("Album", (width_finders, "album"), True)),
+            ("album", OutputColumn("Album", width_finders["album"], True)),
             ("track", OutputColumn("Track", 5, True)),
-            ("title", OutputColumn("Title", (width_finders, "title"), True)),
-            ("bitrate", OutputColumn("Bitrate", (width_finders, "bitrate"), True)),
-            ("path", OutputColumn("Source", (width_finders, "path"), True)),
+            ("title", OutputColumn("Title", width_finders["title"], True)),
+            ("bitrate", OutputColumn("Bitrate", width_finders["bitrate"], True)),
+            ("path", OutputColumn("Source", width_finders["path"], True)),
         ])
         tbl.print_header(True)
         tbl.print_rows(rows)
@@ -392,7 +483,8 @@ class Deduper:
                             "path": file_path, "modified": mf.modified, "size": mf.size,
                             "tags": json.dumps(mf.tag_dict), "sha256": mf.full_hash, "audio_sha256": mf.audio_hash,
                             "v1": mf.v1_ver, "v2": mf.v2_ver, "tag_mismatches": json.dumps(mf.get_mismatch_keys()),
-                            "duration": mf.fingerprint[0], "fingerprint": mf.fingerprint[1]
+                            #"duration": mf.fingerprint[0], "fingerprint": mf.fingerprint[1]
+                            "duration": None, "fingerprint": None
                         }
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))
@@ -464,6 +556,10 @@ class ProgressMonitor:
 
 
 class HashException(Exception):
+    pass
+
+
+class SkipFile(Exception):
     pass
 
 

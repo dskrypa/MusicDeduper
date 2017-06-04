@@ -120,17 +120,6 @@ def print_tiered(obj):
             print(line)
         except UnicodeEncodeError as e:
             uprint(line)
-    
-    
-def _clean_unicode(obj):
-    if isinstance(obj, dict):
-        return {_clean_unicode(k): _clean_unicode(v) for k, v in obj.iteritems()}
-    elif isinstance(obj, list):
-        return [_clean_unicode(v) for v in obj]
-    elif isinstance(obj, unicode):
-        return str(obj)
-    else:
-        return obj
 
 
 class Printer:
@@ -142,6 +131,19 @@ class Printer:
         else:
             raise InputValidationException("Invalid output format: {} (valid options: {})".format(output_format, Printer.formats))
 
+    @classmethod
+    def jsonp(cls, content):
+        return json.dumps(content, sort_keys=True, indent=4)
+
+    @classmethod
+    def _yaml_clean(cls, obj):
+        if isinstance(obj, dict):
+            return {cls._yaml_clean(k): cls._yaml_clean(v) for k, v in obj.iteritems()}
+        elif isinstance(obj, list):
+            return [cls._yaml_clean(v) for v in obj]
+        else:
+            return obj
+
     def pformat(self, content, *args, **kwargs):
         if self.output_format == "json":
             return json.dumps(content)
@@ -150,14 +152,11 @@ class Printer:
         elif self.output_format == "text":
             return "\n".join(format_tiered(content))
         elif self.output_format == "yaml":
-            if isinstance(content, dict) or kwargs.pop("force_single_yaml", False):
-                formatted = yaml.dump(_clean_unicode(content), explicit_start=True, default_flow_style=False)
-            else:
-                formatted = yaml.dump(_clean_unicode(content), explicit_start=True)
-            if formatted.endswith("...\n"):
-                formatted = formatted[:-4]
-            if formatted.endswith("\n"):
-                formatted = formatted[:-1]
+            dump_args = {"explicit_start": True, "default_flow_style": not (isinstance(content, dict) or kwargs.pop("force_single_yaml", False))}
+            formatted = yaml.safe_dump(self._yaml_clean(content), **dump_args)
+            for line_end in ("...\n", "\n"):
+                if formatted.endswith(line_end):
+                    formatted = formatted[:-len(line_end)]
             return formatted
         elif self.output_format == "pprint":
             return pprint.pformat(content)

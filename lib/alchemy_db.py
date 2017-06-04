@@ -94,6 +94,7 @@ class DBTable(object):
             def __setitem__(row, key, value):
                 if key in self.columns:
                     setattr(row, key, value)
+                    self.session.commit()
                 else:
                     raise KeyError(key)
 
@@ -103,25 +104,31 @@ class DBTable(object):
             def update(row, d=None, **kwargs):
                 if d is not None:
                     for k, v in d.iteritems():
-                        row[k] = v
+                        if k in self.columns:
+                            setattr(row, k, v)
                 for k, v in kwargs.iteritems():
-                    row[k] = v
+                    if k in self.columns:
+                        setattr(row, k, v)
+                self.session.commit()
 
             def keys(row):
-                return row.as_dict().keys()
+                return self.columns
 
             def iteritems(row):
-                for k, v in row.as_dict().iteritems():
-                    yield k, v
+                for c in self.columns:
+                    yield c, getattr(row, c)
 
             def __iter__(row):
-                for k in row.as_dict():
-                    yield k
+                for c in self.columns:
+                    yield c
 
             def as_dict(row):
                 return OrderedDict([(c, getattr(row, c)) for c in self.columns])
 
             def __repr__(row):
+                return "<DBRow in {} for pk='{}'>".format(self.name, row[self.pk])
+
+            def __str__(row):
                 return json.dumps(row.as_dict())
 
         self.db = parent_db
@@ -195,6 +202,12 @@ class DBTable(object):
         if not key in self:
             raise KeyError(key)
         self.session.query(self.rowType).filter_by(**{self.pk: key}).delete()
+        self.session.commit()
+
+    def bulk_delete(self, keys):
+        for key in keys:
+            self.session.query(self.rowType).filter_by(**{self.pk: key}).delete()
+        self.session.commit()
 
     def insert(self, row):
         if not isinstance(row, (tuple, list, dict)):

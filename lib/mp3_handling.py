@@ -298,6 +298,8 @@ class MusicFile:
                 return kwargs["default"]
             raise e
         else:
+            if (tag_id == "TDRC") and (len(val) > 4):
+                raise TagValueException(tag_id, val)
             return val
 
     def __contains__(self, item):
@@ -422,7 +424,7 @@ class AcoustidDB:
         if dbkey in self.acoustids:
             #logging.debug("Found in Acoustid DB: ({}, {})".format(duration, fingerprint))
             return self.acoustids[dbkey]["resp"]
-        #logging.debug("Not found in Acoustid DB - looking up: ({}, {})".format(duration, fingerprint))
+        logging.debug("Not found in Acoustid DB - looking up: ({}, {})".format(duration, fingerprint))
         resp = self._fetch_lookup(duration, fingerprint)
         self.acoustids.insert([dbkey, resp])
         self._process_resp(resp)
@@ -528,6 +530,18 @@ class TagVersionMismatchException(Exception):
         super(TagVersionMismatchException, self).__init__(msg, *args, **kwargs)
         self.v1 = v1
         self.v2 = v2
+
+
+class TagValueException(Exception):
+    def __init__(self, tag_id, val, *args, **kwargs):
+        tag_name = tag_name_map.get(tag_id, "?")
+        msg = "Invalid {}/{} value: {}".format(tag_id, tag_name, val)
+        super(TagValueException, self).__init__(msg, *args, **kwargs)
+        self.tag_id = tag_id
+        self.tag_name = tag_name
+        self.val = val
+        self.v1 = val
+        self.v2 = ""
 
 
 class NoTagsFoundException(Exception):
