@@ -158,7 +158,7 @@ class Deduper:
                 logging.info("Automatically choosing {} value of '{}' over '{}' and '{}'".format(field, newval, e.v1, e.v2))
                 return newval
             elif (len(e.v1) == 0) and m2:
-                newval = m1.group(1)
+                newval = m2.group(1)
                 logging.info("Automatically choosing {} value of '{}' over '{}' and '{}'".format(field, newval, e.v1, e.v2))
                 return newval
 
