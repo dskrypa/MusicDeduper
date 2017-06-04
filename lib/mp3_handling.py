@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 from __future__ import print_function, division, unicode_literals
 
@@ -7,14 +8,20 @@ import json
 import logging
 from io import BytesIO
 from hashlib import sha256
-from cached_property import cached_property
 from collections import defaultdict, namedtuple
+from unicodedata import normalize
+from operator import itemgetter
+
+from cached_property import cached_property
 from mutagen.id3._id3v1 import find_id3v1
 from mutagen.mp3 import MP3, BitrateMode
 from mutagen.id3 import ID3
+import acoustid
+from readchar import readchar
 
 from _constants import tag_name_map, compilation_indicators
 from log_handling import LogManager
+from alchemy_db import AlchemyDatabase, DBTable
 
 # V1_Tags: {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
 
@@ -24,11 +31,31 @@ db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + in
 """
 
 NoTagVal = (None,)
-primary_tags = {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "TRCK":"Track"}
+primary_tags = {"TIT2": "Title", "TPE1": "Artist", "TALB": "Album", "TDRC": "Year", "TRCK": "Track"}
+default_replacement_db = "/var/tmp/music_deduper_tag_replacements.db"
+
+
+class TagReplacementDB:
+    _instance = None
+    class __metaclass__(type):
+        @property
+        def instance(cls):
+            if cls._instance is None:
+                cls._instance = cls()
+            return cls._instance
+
+    def __init__(self, db_path=None):
+        self.lm = LogManager.get_instance()
+        self.db = AlchemyDatabase.get_db(db_path or default_replacement_db, logger=self.lm)
+
+    def __getitem__(self, tag_id):
+        if tag_id not in self.db:
+            self.db.add_table(tag_id, [("original", "TEXT"), ("correct", "TEXT")], "original")
+        return self.db[tag_id].simple
 
 
 class MusicFile:
-    info_copy_keys = ["bitrate", "channels", "encoder_info", "length", "sample_rate", "sketchy"]
+    info_copy_keys = ["bitrate", "bitrate_mode", "channels", "encoder_info", "length", "sample_rate", "sketchy"]
     bitrate_modes = {getattr(BitrateMode, attr).real: attr for attr in dir(BitrateMode) if attr.isupper()}
     db_attr_keymap = {"v1_ver": "v1", "v2_ver": "v2", "audio_hash": "audio_sha256", "full_hash": "sha256", "size": "size", "modified": "modified"}
 
@@ -38,6 +65,7 @@ class MusicFile:
         self.v1_ver = None
         self.v2_ver = None
         self.lm = LogManager.get_instance()
+        self.tag_repl_db = TagReplacementDB.instance
 
         if dbrow is None:
             try:
@@ -92,7 +120,10 @@ class MusicFile:
         raw_info = self._raw_info
         info = {key: getattr(raw_info, key) for key in self.info_copy_keys}
         info["bitrate_kbps"] = raw_info.bitrate // 1000
-        info["bitrate_mode"] = self.bitrate_modes[raw_info.bitrate_mode.real]
+        try:
+            info["bitrate_mode"] = raw_info.bitrate_mode
+        except AttributeError:
+            info["bitrate_mode"] = self.bitrate_modes[raw_info.bitrate_mode.real]
         info["bitrate_readable"] = "{} kbps {}".format(info["bitrate_kbps"], info["bitrate_mode"])
         info["time"] = self._ftime(raw_info.length)
         info["info"] = "{time} @ {bitrate_readable}, {sample_rate} Hz [{channels} channels, encoded by {encoder_info}]".format(**info)
@@ -166,6 +197,13 @@ class MusicFile:
                     tag_dict[ver][key] = self.tag_val(value)
         return tag_dict
 
+    def tag_dict_by_id(self):
+        tags_by_id = defaultdict(lambda: defaultdict(lambda: ""))
+        for ver, tags in self.tag_dict.iteritems():
+            for tagid, val in tags.iteritems():
+                tags_by_id[tagid][ver] = val
+        return tags_by_id
+
     def __getitem__(self, item):
         if len(self.tag_dict) < 1:
             raise KeyError(item)
@@ -178,18 +216,86 @@ class MusicFile:
 
         v1_val = self.tag_dict[self.v1_ver][item]
         v2_val = self.tag_dict[self.v2_ver][item]
-        if v1_val == v2_val:
+        if (v1_val == v2_val) or (v2_val.startswith(v1_val)):
             return v2_val
 
-        msg = "{}/{}:{{[{}]'{}' != [{}]'{}'}}".format(item, tag_name_map.get(item, "?"), self.v1_ver, v1_val, self.v2_ver, v2_val)
-        raise TagVersionMismatchException(msg)
+        if item == "TRCK":
+            if "/" in v2_val:
+                try:
+                    v1_value = int(v1_val)
+                    v2_value = int(v2_val.split("/")[0])
+                except ValueError:
+                    pass
+                else:
+                    if v1_value == v2_value:
+                        return v2_val
+            else:
+                try:
+                    v1_value = int(v1_val)
+                    v2_value = int(v2_val)
+                except ValueError:
+                    pass
+                else:
+                    if v1_value == v2_value:
+                        return "{}".format(v2_value)
 
-    def get_tag(self, tag_id, *args):
+        for val in (v1_val, v2_val):
+            try:
+                return self.tag_repl_db[item][val]
+            except KeyError:
+                pass
+
+        msg = "{}/{}:{{[{}]'{}' != [{}]'{}'}}".format(item, tag_name_map.get(item, "?"), self.v1_ver, v1_val, self.v2_ver, v2_val)
+        raise TagVersionMismatchException(msg, v1_val, v2_val)
+
+    def prompting_get_tag(self, tag_id, *args, **kwargs):
+        """
+        :param tag_id: ID of the tag to get
+        :param default: Default value to use if the tag is not present
+        """
+        try:
+            val = self.get_tag(tag_id, *args, **kwargs)
+        except KeyError as e:
+            if args:
+                return args[0]
+            elif "default" in kwargs:
+                return kwargs["default"]
+            raise e
+        except TagVersionMismatchException as e:
+            print("Pick a {}/{} tag version for {}".format(tag_id, tag_name_map.get(tag_id, "?"), self.file_path))
+            print("[{}] {}".format(self.v1_ver, e.v1))
+            print("[{}] {}".format(self.v2_ver, e.v2))
+            print("[s] skip | [x] exit")
+            inpt = None
+            while not inpt:
+                inpt = readchar()
+                if (inpt == "x") or (ord(inpt) == 3):
+                    raise KeyboardInterrupt()
+                elif inpt in ("s", "S"):
+                    raise e
+                elif inpt not in ("1", "2"):
+                    print("Invalid input; enter 1 or 2 to make a choice, s to skip, or x to exit")
+                    inpt = None
+            if inpt == "1":
+                self.tag_repl_db[tag_id][e.v2] = e.v1
+                return e.v1
+            self.tag_repl_db[tag_id][e.v1] = e.v2
+            return e.v2
+        else:
+            return val
+
+    def get_tag(self, tag_id, *args, **kwargs):
+        """
+        :param tag_id: ID of the tag to get
+        :param default: Default value to use if the tag is not present
+        """
         try:
             val = self[tag_id]
         except KeyError as e:
             if args:
                 return args[0]
+            elif "default" in kwargs:
+                return kwargs["default"]
             raise e
         else:
             return val
@@ -266,6 +372,13 @@ class MusicFile:
         else:
             logging.debug("Not changed: {}".format(self.file_path))
 
+    @cached_property
+    def fingerprint(self):
+        """
+        :return tuple: duration, fingerprint
+        """
+        return acoustid.fingerprint_file(self.file_path)
+
 
 def _normalize(val):
     if not val:
@@ -273,6 +386,133 @@ def _normalize(val):
     elif isinstance(val, (str, unicode)):
         return val.lower().replace(" ", "")
     return val
+
+
+"""
+http://musicbrainz.org/ws/2/recording/24739ddc-22ac-4247-9b2c-edca45e40a23?fmt=json&inc=artist-credits+releases
+acoustid results -> .results[].recordings[].id = musicbrainz recording id
+"""
+
+
+class AcoustidDB:
+    lookup_meta = "recordings releasegroups"
+
+    def __init__(self, db_path="/var/tmp/acoustid_info.db", apikey=None):
+        if apikey is None:
+            keyfile_path = os.path.expanduser("~/acoustid_apikey.txt")
+            try:
+                with open(keyfile_path, "r") as keyfile:
+                    apikey = keyfile.read()
+            except OSError as e:
+                raise AcoustidKeyfileException("An API key is required; unable to find or read {}".format(keyfile_path))
+        self.apikey = apikey
+
+        self.lm = LogManager.get_instance()
+        self.db = AlchemyDatabase.get_db(db_path, logger=self.lm)
+        self.acoustids = DBTable(self.db, "acoustid_responses", [("id", "TEXT"), ("resp", "PickleType")], "id")
+        self.artists = DBTable(self.db, "artists", [("id", "TEXT"), ("name", "TEXT"), ("album_ids", "PickleType")], "id")
+        self.albums = DBTable(self.db, "albums", [("id", "TEXT"), ("title", "TEXT"), ("artist_ids", "PickleType"), ("types", "PickleType"), ("track_ids", "PickleType")], "id")
+        self.tracks = DBTable(self.db, "tracks", [("id", "TEXT"), ("title", "TEXT"), ("duration", "INTEGER"), ("artist_ids", "PickleType"), ("album_ids", "PickleType")], "id")
+
+    def _fetch_lookup(self, duration, fingerprint, meta=None):
+        return acoustid.lookup(self.apikey, fingerprint, duration, meta or self.lookup_meta)
+
+    def _lookup(self, duration, fingerprint):
+        dbkey = json.dumps([duration, fingerprint])
+        if dbkey in self.acoustids:
+            #logging.debug("Found in Acoustid DB: ({}, {})".format(duration, fingerprint))
+            return self.acoustids[dbkey]["resp"]
+        #logging.debug("Not found in Acoustid DB - looking up: ({}, {})".format(duration, fingerprint))
+        resp = self._fetch_lookup(duration, fingerprint)
+        self.acoustids.insert([dbkey, resp])
+        self._process_resp(resp)
+        return resp
+
+    def register(self, entity_type, entity_id, *args):
+        try:
+            if entity_id not in self.db[entity_type]:
+                self.db[entity_type].insert([entity_id] + list(args))
+        except KeyError:
+            raise ValueError("Invalid entity table: {}".format(entity_type))
+
+    def _process_resp(self, resp):
+        for result in resp["results"]:
+            logging.debug("Processing result {}".format(result["id"]))
+            for recording in result["recordings"]:
+                logging.debug("Processing recording {}".format(recording["id"]))
+                artist_ids = set()
+                for artist in recording["artists"]:
+                    logging.debug("Processing artist {}".format(artist["id"]))
+                    self.register("artists", artist["id"], artist["name"], set())
+                    artist_ids.add(artist["id"])
+                alb_ids = set()
+                for album in recording["releasegroups"]:
+                    logging.debug("Processing album {}".format(album["id"]))
+                    alb_artist_ids = set()
+                    for alb_artist in album.get("artists", {}):
+                        logging.debug("Processing album artist {}".format(alb_artist["id"]))
+                        self.register("artists", alb_artist["id"], alb_artist["name"], set())
+                        self.artists[alb_artist["id"]]["album_ids"].add(album["id"])
+                        alb_artist_ids.add(alb_artist["id"])
+
+                    album_types = set()
+                    if "type" in album:
+                        album_types.add(album["type"])
+                    if "secondarytypes" in album:
+                        album_types.update(album["secondarytypes"])
+
+                    if "title" in album:
+                        self.register("albums", album["id"], album["title"], alb_artist_ids, album_types, set())
+                        self.albums[album["id"]]["track_ids"].add(recording["id"])
+                        alb_ids.add(album["id"])
+                self.register("tracks", recording["id"], recording["title"], recording["duration"], artist_ids, alb_ids)
+
+    def get_track(self, track_id):
+        try:
+            track = self.tracks[track_id]
+        except KeyError:
+            raise ValueError("Track ID not found: {}".format(track_id))
+        resp = {k: track[k] for k in ("id", "title", "duration")}
+        resp["artists"] = {aid: self.get_artist_name(aid) for aid in track["artist_ids"]}
+        resp["albums"] = [self.get_album(aid) for aid in track["album_ids"]]
+        return resp
+
+    def get_album(self, album_id):
+        try:
+            album = self.albums[album_id]
+        except KeyError:
+            raise ValueError("Album ID not found: {}".format(album_id))
+        resp = {k: album[k] for k in ("id", "title", "type")}
+        resp["artists"] = {aid: self.get_artist_name(aid) for aid in album["artist_ids"]}
+        return resp
+
+    def get_artist_name(self, artist_id):
+        try:
+            return self.artists[artist_id]["name"]
+        except KeyError:
+            raise ValueError("Artist ID not found: {}".format(artist_id))
+
+    def lookup(self, duration, fingerprint):
+        results = self._lookup(duration, fingerprint)["results"]
+        best = max(results, key=itemgetter("score"))
+
+        """
+        Score albums based on...
+        album artist matches song artist: +100
+        track count == 1: -25
+        country == "US": + 10
+        title contains remix or greatest hits: -25
+        """
+
+        best_ids = [rec["id"] for rec in best["recordings"]]
+        if len(best_ids) > 1:
+            logging.warning("Found multiple recordings in best result with score {}: {}".format(best["score"], ", ".join(best_ids)))
+
+        return self.get_track(best_ids[0])
+
+
+class AcoustidKeyfileException(Exception):
+    pass
 
 
 class MusicFileOpenException(Exception):
@@ -284,7 +524,10 @@ class UnknownFrameException(Exception):
 
 
 class TagVersionMismatchException(Exception):
-    pass
+    def __init__(self, msg, v1=None, v2=None, *args, **kwargs):
+        super(TagVersionMismatchException, self).__init__(msg, *args, **kwargs)
+        self.v1 = v1
+        self.v2 = v2
 
 
 class NoTagsFoundException(Exception):
