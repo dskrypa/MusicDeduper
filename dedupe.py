@@ -7,12 +7,15 @@ import json
 import logging
 import argparse
 from collections import OrderedDict, defaultdict, Counter
+from operator import itemgetter
+
+from readchar import readchar
 
 from lib.common import getFilteredPaths, path_usable_str
 from lib.log_handling import LogManager, OutputManager
 from lib.alchemy_db import AlchemyDatabase, DBTable
 from lib.output_formatting import fTime, Printer, format_percent, format_output, OutputTable, OutputColumn
-from lib.mp3_handling import MusicFile, MusicFileOpenException, NoTagVal, TagVersionMismatchException
+from lib.mp3_handling import MusicFile, MusicFileOpenException, NoTagVal, TagVersionMismatchException, AcoustidDB, TagReplacementDB
 from lib._constants import tag_name_map
 
 """
@@ -25,12 +28,15 @@ preferred_version = "2.3.0"
 
 info_columns = ["bitrate", "bitrate_kbps", "bitrate_mode", "channels", "encoder_info", "length", "sample_rate", "sketchy", "time"]
 info_types = ["INT", "INT", "TEXT", "INT", "TEXT", "FLOAT", "INT", "BOOLEAN", "TEXT"]
-db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + info_columns + ["v1", "v2", "tag_mismatches"]
-db_types = ["TEXT", "INT", "INT", "TEXT", "TEXT", "TEXT"] + info_types + ["TEXT", "TEXT", "TEXT"]
+db_columns = ["path", "modified", "size", "sha256", "audio_sha256", "tags"] + info_columns + ["v1", "v2", "tag_mismatches", "duration", "fingerprint"]
+db_types = ["TEXT", "INT", "INT", "TEXT", "TEXT", "TEXT"] + info_types + ["TEXT", "TEXT", "TEXT", "FLOAT", "TEXT"]
+
+fixing_cols = ["path", "artist", "year", "album", "track", "title", "bitrate"]
+fixing_types = ["TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT", "TEXT"]
 
 # V1_Tags: {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "COMM":"Comment", "TRCK":"Track", "TCON":"Genre"}
 
-primary_tags = {"TIT2":"Title", "TPE1":"Artist", "TALB":"Album", "TDRC":"Year", "TRCK":"Track"}
+primary_tags = {"TIT2": "Title", "TPE1": "Artist", "TALB": "Album", "TDRC": "Year", "TRCK": "Track"}
 
 
 def main():
@@ -50,6 +56,9 @@ def main():
     parser4.add_argument("--analysis_mode", "-am", choices=("audio", "full"), default="full", help="")
     parser4.add_argument("--tag", "-t", help="Tag to find for files_with_tag report")
 
+    parser5 = sparsers.add_parser("lookup", help="")
+    parser6 = sparsers.add_parser("organize", help="")
+
     for _parser in sparsers.choices.values() + [parser]:
         _parser.add_argument("--db_path", "-db", metavar="/path/to/music_db", default=default_db_path, help="DB location (default: %(default)s)")
         _parser.add_argument("--debug", "-d", action="store_true", default=False, help="Log additional debugging information (default: %(default)s)")
@@ -57,11 +66,14 @@ def main():
     args = parser.parse_args()
 
     lm, log_path = LogManager.create_default_logger(args.debug, args.verbose)
-    logging.info("Logging to: {}".format(log_path))
+    lm.verbose("Logging to: {}".format(log_path))
 
     if args.action == "scan":
         deduper = Deduper(lm, args.db_path)
         deduper.scan(args.scan_dir)
+    elif args.action == "organize":
+        deduper = Deduper(lm, args.db_path)
+        deduper.organize()
     elif args.action == "view":
         deduper = Deduper(lm, args.db_path)
         deduper.view(args.tags)
@@ -74,21 +86,116 @@ def main():
     elif args.action == "report":
         deduper = Deduper(lm, args.db_path)
         deduper.report(args.report_name, analysis_mode=args.analysis_mode, find_tag=args.tag)
+    elif args.action == "lookup":
+        deduper = Deduper(lm, args.db_path)
+        deduper.lookup()
 
 
 class Deduper:
     def __init__(self, log_manager, db_path):
         self.lm = OutputManager(log_manager)
-        self.db = AlchemyDatabase(db_path, logger=self.lm)
+        self.db = AlchemyDatabase.get_db(db_path, logger=self.lm)
         self.music = DBTable(self.db, "music", zip(db_columns, db_types), "path")
+        self.fixing = DBTable(self.db, "fixed", zip(fixing_cols, fixing_types), "path")
+        self.acoustid_db = AcoustidDB()
         self.p = Printer("json-pretty")
+        self.tag_repl_db = TagReplacementDB.instance
+
+    def _resolve_mismatch(self, file_path, tagid, field, e):
+        print("\nOptions for {}".format(file_path))
+        print("1) For all {}/{} tags, replace '{}' with '{}'".format(tagid, field, e.v1, e.v2))
+        print("2) For all {}/{} tags, replace '{}' with '{}'".format(tagid, field, e.v2, e.v1))
+        print("3) For just this file, set the {} to '{}'".format(field, e.v1))
+        print("4) For just this file, set the {} to '{}'".format(field, e.v2))
+        print("5) For all {}/{} tags, replace '{}' with a custom value".format(tagid, field, e.v1))
+        print("6) For all {}/{} tags, replace '{}' with a custom value".format(tagid, field, e.v2))
+        print("7) For just this file, replace the {} with a custom value".format(field))
+        print("s) Skip this file | x) Exit")
+
+        inpt = None
+        while not inpt:
+            inpt = readchar()
+            if (inpt == "x") or (ord(inpt) == 3):
+                raise KeyboardInterrupt()
+            elif inpt in ("s", "S"):
+                return ""
+            elif inpt not in ("1", "2", "3", "4", "5", "6", "7"):
+                print("Invalid input; please enter a choice from the options above")
+                inpt = None
+
+        if inpt == "1":
+            self.tag_repl_db[tagid][e.v2] = e.v1
+            return e.v1
+        elif inpt == "2":
+            self.tag_repl_db[tagid][e.v1] = e.v2
+            return e.v2
+        elif inpt == "3":
+            return e.v1
+        elif inpt == "4":
+            return e.v2
+        elif inpt in ("5", "6", "7"):
+            custom = None
+            while not custom:
+                custom = raw_input("Enter a custom value: ")
+                custom = custom.strip()
+            if inpt == "5":
+                self.tag_repl_db[tagid][e.v1] = custom
+            elif inpt == "6":
+                self.tag_repl_db[tagid][e.v2] = custom
+            return custom
+
+    def organize(self):
+        placement_tags = {"albumArtist": "TPE2", "artist": "TPE1", "album": "TALB", "title": "TIT2", "track": "TRCK", "year": "TDRC"}
+        organizing = defaultdict(lambda: defaultdict(list))
+        width_finders = defaultdict(set)
+        for row in self.music:
+            song = MusicFile(row["path"], row)
+            try:
+                song_fields = self.fixing[song.file_path]
+            except KeyError:
+                song_fields = {"bitrate": song.info["bitrate_readable"], "path": song.file_path}
+                for field, tagid in placement_tags.iteritems():
+                    try:
+                        song_fields[field] = song.get_tag(tagid, NoTagVal)
+                    except TagVersionMismatchException as e:
+                        song_fields[field] = self._resolve_mismatch(song.file_path, tagid, field, e)
+                    else:
+                        if song_fields[field] is NoTagVal:
+                            logging.warning("No {}/{} value found for {}".format(tagid, field, song.file_path))
+                            song_fields[field] = ""
+                artist = song_fields["albumArtist"] if song_fields["albumArtist"] else song_fields["artist"]
+                song_fields["artist"] = artist
+                del song_fields["albumArtist"]
+                self.fixing[song.file_path] = song_fields
+
+            for field, value in song_fields.iteritems():
+                width_finders[field].add(value)
+            organizing[song_fields["artist"]][song_fields["album"]].append(song_fields)
+
+        rows = []
+        for artist in sorted(organizing.keys()):
+            for album in sorted(organizing[artist].keys()):
+                for song in sorted(organizing[artist][album], key=itemgetter("track")):
+                    rows.append(song)
+
+        tbl = OutputTable([
+            ("artist", OutputColumn("Artist", (width_finders, "artist"), True)),
+            ("year", OutputColumn("Year", 4, True)),
+            ("album", OutputColumn("Album", (width_finders, "album"), True)),
+            ("track", OutputColumn("Track", 5, True)),
+            ("title", OutputColumn("Title", (width_finders, "title"), True)),
+            ("bitrate", OutputColumn("Bitrate", (width_finders, "bitrate"), True)),
+            ("path", OutputColumn("Source", (width_finders, "path"), True)),
+        ])
+        tbl.print_header(True)
+        tbl.print_rows(rows)
 
     def dedupe(self):
         """
         Generate a deduplication plan
         """
         destinations = {"compilation": {}, "podcast": {}, "by_artist": {}, "problematic": {"tag_mismatch": {}, "missing_info": {}, "bad": {}}}
-        placement_tags = {"albumArtist": "TPE2", "artist": "TPE1", "album": "TALB", "title": "TIT2", "": "", "": ""}
+        placement_tags = {"albumArtist": "TPE2", "artist": "TPE1", "album": "TALB", "title": "TIT2", "track": "TRCK", "year": "TDRC"}
 
         for row in self.music:
             song = MusicFile(row["path"], row)
@@ -199,7 +306,7 @@ class Deduper:
                 song = MusicFile(row["path"], row)
                 for tid in ("TPE1", "TPE2"):
                     try:
-                        artist = song.get_tag(tid, NoTagVal)
+                        artist = song.prompting_get_tag(tid, NoTagVal)
                     except TagVersionMismatchException as e:
                         self.lm.error("{}: {}".format(song.file_path, e))
                     else:
@@ -210,7 +317,7 @@ class Deduper:
                                 self.lm.error("{}: artist '{}' [{}]".format(e, artist, song.file_path))
 
                 try:
-                    album = song.get_tag("TALB", NoTagVal)
+                    album = song.prompting_get_tag("TALB", NoTagVal)
                 except TagVersionMismatchException as e:
                     self.lm.error("{}: {}".format(song.file_path, e))
                 else:
@@ -248,6 +355,13 @@ class Deduper:
             analyzed[row[hashkey]].append(row)
         return analyzed
 
+    def lookup(self):
+        p = Printer("json-pretty")
+        for row in self.music:
+            print("{}:".format(row["path"]))
+            info = self.acoustid_db.lookup(row["duration"], row["fingerprint"])
+            p.pprint(info)
+
     def scan(self, scan_dir):
         paths = getFilteredPaths(scan_dir, "mp3")
         with ProgressMonitor(paths, self.lm) as pm:
@@ -277,11 +391,12 @@ class Deduper:
                         row = {
                             "path": file_path, "modified": mf.modified, "size": mf.size,
                             "tags": json.dumps(mf.tag_dict), "sha256": mf.full_hash, "audio_sha256": mf.audio_hash,
-                            "v1": mf.v1_ver, "v2": mf.v2_ver, "tag_mismatches": json.dumps(mf.get_mismatch_keys())
+                            "v1": mf.v1_ver, "v2": mf.v2_ver, "tag_mismatches": json.dumps(mf.get_mismatch_keys()),
+                            "duration": mf.fingerprint[0], "fingerprint": mf.fingerprint[1]
                         }
                     except Exception as e:
                         pm.record_error("{}: {}".format(file_path, e))
-                        logging.debug("{}:{}".format(e.__class__.__name__, e))
+                        logging.debug("{}:{}".format(type(e).__name__, e))
                         continue
                     else:
                         row.update({key: info[key] for key in info_columns})
