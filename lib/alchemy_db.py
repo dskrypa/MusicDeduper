@@ -7,7 +7,7 @@ import json
 from collections import OrderedDict
 
 from cached_property import cached_property
-from sqlalchemy import create_engine, MetaData, Table, Column
+from sqlalchemy import create_engine, MetaData, Table, Column, func as sql_func
 from sqlalchemy.orm import mapper, sessionmaker
 from sqlalchemy.exc import NoSuchTableError
 import sqlalchemy.types as sqltypes
@@ -189,6 +189,21 @@ class DBTable(object):
     def select(self, **kwargs):
         return self.rows().filter_by(**kwargs)
 
+    def distinct_select(self, column):
+        """
+        :param column: Name of the column for which to select distinct values
+        :return list: Unique values for the given column in this table
+        """
+        if column not in self.columns:
+            raise KeyError(column)
+        return [val[0] for val in self.session.query(getattr(self.rowType, column)).distinct()]
+
+    def distinct_iter(self, column):
+        if column not in self.columns:
+            raise KeyError(column)
+        for val in self.session.query(getattr(self.rowType, column)).distinct():
+            yield val[0]
+
     def __getitem__(self, key):
         try:
             return self.session.query(self.rowType).filter_by(**{self.pk: key})[0]
@@ -244,6 +259,9 @@ class DBTable(object):
             self[key].update(row)
         except KeyError:
             self.insert(row)
+
+    def __len__(self):
+        return self.session.query(sql_func.count(getattr(self.rowType, self.pk))).scalar()
 
     def __iter__(self):
         for row in self.session.query(self.rowType):

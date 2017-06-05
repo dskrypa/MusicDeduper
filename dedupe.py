@@ -11,6 +11,7 @@ from collections import OrderedDict, defaultdict, Counter
 from operator import itemgetter
 
 from readchar import readchar
+from Levenshtein import ratio as str_similarity
 
 from lib.common import getFilteredPaths, path_usable_str
 from lib.log_handling import LogManager, OutputManager
@@ -136,12 +137,6 @@ class Deduper:
             elif (diff2 == 0) and (min_ord2 > 31) and ((diffp1 > 0.3) or (min_ord1 < 32)):
                 logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v2, e.v1))
                 return e.v2 #Option 4
-            # if (diffp1 < 0.7) and (diff2 == 0):
-            #     logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v2, e.v1))
-            #     return e.v2 #Option 4
-            # elif (diffp2 < 0.7) and (diff1 == 0):
-            #     logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v1, e.v2))
-            #     return e.v1 #Option 3
         elif tagid == "TDRC":
             if e.v1.isdigit() and (not e.v2.isdigit()) and (len(e.v1) == 4):
                 logging.info("Automatically choosing {} value of '{}' over '{}'".format(field, e.v1, e.v2))
@@ -229,6 +224,15 @@ class Deduper:
         placement_tags = {"albumArtist": "TPE2", "artist": "TPE1", "album": "TALB", "title": "TIT2", "track": "TRCK", "year": "TDRC"}
         organizing = defaultdict(lambda: defaultdict(list))
         width_finders = defaultdict(set)
+
+        """
+        TODO:
+        all_artists = self.fixing.distinct_select("artist")
+        for artist in all_artists:
+            if 1 > str_similarity(song.artist, artist) > 0.5:
+                suggest replacement
+        """
+
         for row in self.music:
             try:
                 song = MusicFile(row["path"], row)
