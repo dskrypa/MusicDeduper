@@ -18,9 +18,12 @@ import re
 import os, shutil, hashlib
 import eyed3_79 as eyed3
 
-from common import *
-from _constants import *
+from lib.common import *
+from lib._constants import *
 from songWrapper import *
+
+tagTypes = tag_name_map
+
 
 def main():
     parser = ArgumentParser(description="MP3 Tag Manager")
@@ -127,7 +130,7 @@ def main():
             for tag in tags:
                 ttdl = len(tagTypes[tag['id']])
                 lttdl = ttdl if (ttdl > lttdl) else lttdl
-            tfmt = "{0[ver]} {0[id]} {1:" + str(lttdl) + "} {0[val]}"
+            tfmt = "{0[ver]} {0[id]} {1:" + str(lttdl) + "} '{0[val]}'"
             for tag in tags:
                 clio.printf(tfmt, tag, tagTypes[tag["id"]])
         elif showFilter:

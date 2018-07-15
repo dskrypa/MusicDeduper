@@ -5,6 +5,8 @@ from __future__ import print_function, division, unicode_literals
 import os
 import re
 import codecs
+import time
+import sys
 from contextlib import contextmanager
 from collections import OrderedDict, Callable
 
@@ -135,5 +137,97 @@ class DefaultOrderedDict(OrderedDict):
 
     def __copy__(self):
         return type(self)(self.default_factory, self)
+
+
+def fTime(seconds):
+    seconds = int(seconds)
+    minutes = int(seconds / 60)
+    seconds -= (minutes * 60)
+    hours = int(minutes / 60)
+    minutes -= (hours * 60)
+    return "{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds)
+
+
+class PerfTimer():
+    """Simple performance monitor including a timer and counters"""
+    def __init__(self):
+        self.start = time.time()
+
+    def time(self):
+        """Return the current time using the same method as the internal timer"""
+        return time.time()
+
+    def elapsed(self, since=None):
+        """Return the time delta in seconds since initialization"""
+        sinceTime = self.start if since is None else since
+        return time.time() - sinceTime
+
+    def elapsedf(self):
+        """Return the time delta as a string in the form HH:MM:SS"""
+        return time.strftime("%H:%M:%S",time.gmtime(self.elapsed()))
+
+
+def to_bytes(text):
+    if isinstance(text, unicode):
+        return text.encode("utf-8")
+    return text
+
+
+def to_unicode(text):
+    if not isinstance(text, unicode):
+        return text.decode("utf-8")
+    return text
+
+
+class clio():
+    """Command Line Interface Output"""
+    lml=0;
+    #utfout = open(sys.stdout, 'w', encoding="utf-8")
+
+    @classmethod
+    def _fmt(cls, msg):
+        """Format the given message for overwriting"""
+        mlen = len(msg)
+        suffix = " " * (clio.lml-mlen) if mlen < clio.lml else ""
+        clio.lml = mlen
+        return "\r" + msg + suffix
+
+    @classmethod
+    def show(cls, msg=""):
+        """Display overwritable message"""
+        wmsg = cls._fmt(msg)	#.encode("utf-8")
+        #cls.utfout.write(wmsg)
+        #cls.utfout.flush()
+        try:
+            sys.stdout.write(to_bytes(wmsg))
+            sys.stdout.flush()
+        except IOError:
+            pass
+
+    @classmethod
+    def showf(cls, fmt, *args):
+        """Display formatted overwritable message"""
+        msg = fmt.format(*args)
+        cls.show(msg)
+
+    @classmethod
+    def println(cls, msg=""):
+        """Display message on a new line"""
+        wmsg = cls._fmt(msg + "\n")	#.encode("utf-8")
+        #sys.stdout.write(cls._fmt(msg) + "\n")
+        #cls.utfout.write(wmsg)
+        #cls.utfout.flush()
+        try:
+            sys.stdout.write(to_bytes(wmsg))
+            sys.stdout.flush()
+        except IOError:
+            pass
+
+
+    @classmethod
+    def printf(cls, fmt, *args):
+        """Display formatted message on a new line"""
+        msg = fmt.format(*args)
+        cls.println(msg)
 
 

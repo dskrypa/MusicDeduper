@@ -6,7 +6,7 @@ Date: 2017.02.04
 Version: 1.4.1
 """
 
-from __future__ import division
+from __future__ import division, unicode_literals
 #from django.utils import text as dtext
 import re
 import eyed3_79 as eyed3
@@ -15,6 +15,16 @@ from lib._constants import *
 
 compIndicatorsA = {"soundtrack":True,"variousartists":True}
 compIndicatorsB = ["billboard","now thats what i call music","power trakks"]
+
+
+def byteFmt(byteCount):
+    labels = ['B','KB','MB','GB','TB']
+    bc = byteCount
+    c = 0
+    while ((bc > 1024) and (c < 4)):
+        bc /= 1024
+        c += 1
+    return "{:,.2f} {}".format(bc, labels[c])
 
 
 class SongException(Exception):
@@ -49,10 +59,12 @@ class SongTag():
             return self.val
 
     def __str__(self):
-        return "[{}_{}]{}".format(self.id, self.ver, self.val)
+        return "[{}_{}]{}".format(to_unicode(self.id), self.ver, to_unicode(self.val))
+
+    __unicode__ = __str__
 
     def __repr__(self):
-        return "[{}_{}]{}".format(self.id, self.ver, self.val)
+        return "[{}_{}]{}".format(to_unicode(self.id), self.ver, to_unicode(self.val))
 
 class Song():
     gpat = re.compile(r'\D*(\d+).*')
@@ -132,6 +144,7 @@ class Song():
         return changed
     
     def _addTagsFromAudioFile(self, af):
+        if af is None: return
         if af.tag is None: return
         if af.info is not None:
             self.bitrate = af.info.mp3_header.bit_rate
@@ -163,6 +176,57 @@ class Song():
         self.tagsById[tid].append(st)
         self.versions[tver] = True
     
+    def raw_audio_file(self, id3_ver=2):
+        return eyed3.load(self.fpath, (id3_ver,None,None))
+    
+    def raw_tags(self, id3_ver=2):
+        af = eyed3.load(self.fpath, (id3_ver,None,None))
+        return af.tag.frame_set
+
+    def convert_comment_to_lyrics(self):
+        if self._isBadFile: return
+        for v in range(2, 0, -1):
+            changed = False
+            af = eyed3.load(self.fpath, (v,None,None))
+            if af is not None and af.tag is not None:
+                if "COMM" in af.tag.frame_set:
+                    comm_frames = af.tag.frame_set["COMM"]
+                    if len(comm_frames) > 1:
+                        raise ValueError("Expected only one comment frame, found {}".format(len(comm_frames)))
+                    comment = af.tag.frame_set["COMM"].pop(0)
+                    lyrics = eyed3.id3.frames.LyricsFrame(text=comment.text)
+                    print("Converting comment to lyrics for {}".format(self.fpath))
+                    af.tag.frame_set["USLT"] = lyrics
+                    atv = af.tag.version
+                    if atv[0] == 2:
+                        af.tag.save(version=(2,4,0))
+                    else:
+                        af.tag.save(version=atv)
+                    self.updateTags()
+                    break
+                    
+    def remove_tag(self, tag_id, tag_val):
+        if self._isBadFile: return
+        for v in range(2, 0, -1):                                                #Check V2 then V1
+            changed = False
+            af = eyed3.load(self.fpath, (v,None,None))                            #Load the tags for the selected version
+            if af.tag is not None:                                                #If there are any tags
+                if tag_id in af.tag.frame_set:
+                    for i, frame in enumerate(af.tag.frame_set[tag_id]):
+                        if hasattr(frame, "text") and frame.text == tag_val:
+                            print("Removing {} # {} from {}".format(tag_id, i, self.fpath))
+                            af.tag.frame_set[tag_id].pop(i)
+                            changed = True
+                            break
+
+                if changed:                                                        #If a change was made
+                    atv = af.tag.version                                        #Check the version number of the tag
+                    if atv[0] == 2:                                            #If it's version 2
+                        af.tag.save(version=(2,4,0))                            #Save as version 2.4
+                    else:                                                        #Otherwise if it's version 1
+                        af.tag.save(version=atv)                                #Save as its original version
+                    self.updateTags()
+
     def remTags(self, toRemove):
         if self._isBadFile: return
         for v in range(2, 0, -1):                                                #Check V2 then V1
